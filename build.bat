@@ -24,20 +24,34 @@ if not defined GOEXE (
     exit /b 1
 )
 
-echo [*] Using: %GOEXE%
-echo [*] Building yssh.exe ...
+set CGO_ENABLED=0
 
-"%GOEXE%" build -trimpath -o yssh.exe ./cmd/yssh
+echo [*] Using: %GOEXE%
+echo.
+echo [*] Building yssh.exe ...
+"%GOEXE%" build -trimpath -ldflags "-s -w" -o yssh.exe ./cmd/yssh
 if errorlevel 1 (
-    echo [x] Build failed.
+    echo [x] Build failed: yssh
     exit /b 1
 )
 
-echo [+] Built: %CD%\yssh.exe
+echo [*] Building ysshtray.exe ...
+"%GOEXE%" build -trimpath -ldflags "-s -w -H=windowsgui" -o ysshtray.exe ./cmd/ysshtray
+if errorlevel 1 (
+    echo [x] Build failed: ysshtray
+    exit /b 1
+)
+
+echo.
+echo [+] Built:
+echo       %CD%\yssh.exe
+echo       %CD%\ysshtray.exe
 echo.
 echo Next steps:
-echo   1. Add %CD% to your PATH
-echo   2. yssh add web root@1.2.3.4 --port 2222 --env prod
-echo   3. yssh web
+echo   yssh install         Install to %%LOCALAPPDATA%%\Programs\YunSSH
+echo   yssh add web root@1.2.3.4 --port 2222 --env prod
+echo   yssh web
+echo.
+echo Note: ysshtray.exe is a GUI binary; double-clicking it starts the tray.
 
 endlocal
