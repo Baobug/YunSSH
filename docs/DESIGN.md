@@ -203,8 +203,13 @@ Host hk-jump
 | `credential` | `internal/credential` | Credential Manager 的读写删；密码交互提示 | `wincred` |
 | `backend` | `internal/backend` | 连接后端接口 + 实现（ssh / plink / native） | `session` |
 | `search` | `internal/search` | 模糊匹配与排序 | `session` |
+| `launcher` | `internal/launcher` | 把 ssh 命令行交给 Windows Terminal 执行 | 无 |
+| `tray` | `internal/tray` | 托盘菜单构建、事件分发、图标生成 | `systray` `session` `launcher` |
+| `install` | `internal/install` | 自安装：文件复制、注册表、PATH、卸载登记 | `registry` |
+| `dialog` | `internal/dialog` | 原生消息框（仅 `user32.dll`） | 无 |
 | `term` | `internal/term` | 终端标题、环境色带、密码提示、宽度探测 | `x/term` |
 | `cli` | `cmd/yssh` | 参数解析与命令分发 | 全部 |
+| `ysshtray` | `cmd/ysshtray` | 托盘程序入口（GUI 子系统） | `tray` `install` |
 
 ### 7.1 `session` 包核心接口
 
@@ -751,6 +756,66 @@ YunSSH/
 | 凭据键 | **`user@host:port`** | 改名不失效，多别名共享 | 按别名：改名即失联 |
 | 配置解析 | **`ssh -G`** | 零成本支持 Include / 通配符 / 默认值 | 自写解析器：维护成本高、易与真实行为不符 |
 | 写入方式 | **追加 + 块删除 + 备份** | 绝不破坏用户手写内容 | 全量重写：会丢失注释与格式 |
+
+---
+
+## 19. 托盘与安装设计（v0.2.0 补充）
+
+### 19.1 托盘不自己实现终端
+
+托盘点击主机后执行的是 `wt -w 0 nt ssh <别名>`——终端仍然是系统原生的。
+
+理由与 Step 1 一致：自己实现终端仿真意味着要处理 ANSI 解析、PTY resize、鼠标事件、真彩色一整套问题，而收益仅仅是"看起来是一体的"。把终端交给 Windows Terminal 之后，`vim`、`tmux`、Ctrl+C、滚动、复制粘贴的语义全部天然正确。
+
+未安装 Windows Terminal 时回退到 `cmd /c start "" ssh <别名>`，保证功能不缺失。
+
+### 19.2 菜单结构的两个约束
+
+**约束一：父项不能禁用。** Windows 原生菜单里被禁用的项无法展开子菜单。因此「主机」子菜单的父项保留了一个有意义的动作：点击即在终端打开完整列表（等价于运行 `yssh`）。
+
+**约束二：动态内容必须关在子菜单里。** 静态项（刷新、关于、退出）位于菜单末尾，若每次刷新都重建全部菜单项，新加的主机项会被追加到末尾，顺序就乱了。把主机放进独立子菜单后，刷新只影响子菜单内部，静态项位置固定。
+
+菜单项标题带 `[env]` 前缀，是「不展开子菜单也能分辨生产与靶机」的直接实现，与铁律三（安全默认值不妥协）同源。
+
+刷新时旧的监听 goroutine 通过关闭 `done` channel 退出，避免反复刷新后 goroutine 堆积。
+
+### 19.3 自安装的设计取舍
+
+**为什么不用 Inno Setup 之类的打包器**
+
+程序需要的全部能力——复制文件、写注册表、改 PATH、登记卸载项——用 Go 加 `x/sys/windows/registry` 就能完成，不引入外部工具链。代价是放弃图形安装向导；收益是分发时只有一个 exe，构建流程没有任何额外依赖。
+
+安装逻辑全部收在 `internal/install` 内。**将来若改用标准安装器，只需替换这一层，程序自身代码不受影响**——这是把它独立成包而非塞进 `cmd/` 的主要原因。
+
+**为什么装在 %LOCALAPPDATA% 而不是 Program Files**
+
+用户级安装全程无需管理员权限、不弹 UAC。代价是每个用户需各自安装一次，对本工具的使用场景（个人开发机）可以接受。
+
+**卸载时如何删除自己**
+
+正在运行的可执行文件无法自删。做法是生成一个临时批处理：先 `ping` 延时约 2 秒（用 `ping` 而非 `timeout`，后者在无控制台环境下会直接报错），再 `rmdir /s /q` 删除目录，最后删除脚本自身。
+
+**PATH 修改的两处细节**
+
+1. 必须用 `SetExpandStringValue` 写回。用户 PATH 里常含 `%USERPROFILE%` 这类变量，若写成普通字符串会丢失展开语义，等于悄悄改坏别人的环境。
+2. 改完必须广播 `WM_SETTINGCHANGE`。否则已运行的资源管理器不会刷新环境块，用户新开的终端仍读不到更新后的 PATH。
+
+### 19.4 一个容易忽略的编译约束
+
+托盘库在 Windows 下是纯 Go 实现，但**在其它平台需要 CGO（GTK）**。因此 `internal/tray`、`internal/install`、`cmd/ysshtray` 全部带 `//go:build windows`；`cmd/yssh` 的安装命令用 `cmd_install_windows.go` / `cmd_install_other.go` 两个文件承载，保证非 Windows 平台仍可编译。
+
+构建时必须设 `CGO_ENABLED=0`，否则会破坏单文件分发的目标。
+
+### 19.5 验证结果（2026-09-18）
+
+| 项 | 结果 |
+|---|---|
+| 安装 | 文件复制、卸载登记项、自启项、PATH 注入全部正确写入 |
+| 重复安装 | 覆盖成功，自启状态按参数正确切换（升级路径可用） |
+| 卸载 | 注册表清理 + 延迟删除目录，`~/.ssh/config` 未受影响 |
+| 重复卸载 | 提示「尚未安装」并返回 0，操作幂等 |
+| 环境残留 | 无。用户原有 10 条 PATH 条目一条未动 |
+| 托盘启动 | 从安装目录启动正常，图标进入托盘区 |
 
 ---
 

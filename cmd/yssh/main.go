@@ -16,7 +16,7 @@ import (
 )
 
 // version 是工具版本号。
-const version = "0.1.0"
+const version = "0.2.0"
 
 // 退出码约定。参见 docs/DESIGN.md 第 8.5 节。
 const (
@@ -51,6 +51,12 @@ func run(args []string) int {
 		return cmdShow(args[1:])
 	case "edit":
 		return cmdEdit(args[1:])
+	case "install":
+		return cmdInstall(args[1:])
+	case "uninstall":
+		return cmdUninstall(args[1:])
+	case "autostart":
+		return cmdAutoStart(args[1:])
 	case "run":
 		if len(args) < 2 {
 			errf("用法: yssh run <别名> [透传参数...]")
@@ -95,6 +101,9 @@ func printHelp() {
   yssh rm <别名>                删除主机条目（会先备份）
   yssh show <别名>              显示 ssh 解析出的生效配置
   yssh edit [别名]              用编辑器打开配置文件
+  yssh install                  安装到当前用户目录并常驻托盘
+  yssh uninstall                卸载
+  yssh autostart [on|off]       查询或切换开机自启
 
 add 选项:
   --port <端口>     端口
@@ -102,6 +111,15 @@ add 选项:
   --env <环境>      环境标识，如 prod / test / lab
   --tags <标签>     逗号分隔的标签
   --note <备注>     备注，可含空格，必须放在最后
+
+install 选项:
+  --autostart       安装时开启开机自启（不再询问）
+  --no-autostart    安装时不开启开机自启（不再询问）
+  --no-path         不把安装目录加入 PATH
+
+托盘程序:
+  ysshtray.exe      常驻托盘，点击图标即可从菜单直接连接主机
+  yssh              命令行工具，两者共用同一份 ~/.ssh/config
 
 透传参数:
   第一个参数之后的内容会原样传给 ssh，例如:
