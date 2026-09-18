@@ -57,6 +57,63 @@ yssh web                # 连接
 
 ---
 
+## 安装
+
+### 方式一：双击安装（推荐）
+
+双击 `ysshtray.exe`，按提示确认即可，**全程无需管理员权限**。
+
+| 动作 | 位置 |
+|---|---|
+| 复制程序 | `%LOCALAPPDATA%\Programs\YunSSH\` |
+| 登记卸载项 | `HKCU\...\Uninstall\YunSSH` → 出现在「设置 → 应用」 |
+| 开机自启（可选） | `HKCU\...\CurrentVersion\Run` |
+| 加入 PATH | `HKCU\Environment\Path` |
+
+安装完成后程序会从安装目录重新拉起，托盘图标随即出现。
+
+### 方式二：命令行安装
+
+```bash
+yssh install                    # 交互询问是否开机自启
+yssh install --autostart        # 直接开启
+yssh install --no-autostart --no-path
+yssh uninstall                  # 卸载
+yssh autostart on|off           # 随时切换开机自启
+```
+
+重复执行 `install` 即为升级（同名文件直接覆盖）。
+
+---
+
+## 托盘程序
+
+安装后 `ysshtray.exe` 常驻系统托盘：
+
+```
+主机 ▸
+├── [prod] prod-web          ← 点击即在 Windows Terminal 新标签中连接
+├── [prod] prod-db
+├── [lab]  lab-msf
+└── hk-jump
+────────────
+搜索主机…                     ← 在终端里打开完整列表
+打开配置文件
+刷新列表
+────────────
+开机自启                      ← 可勾选
+────────────
+关于 / 退出
+```
+
+菜单按「环境 → 别名」排序，未标注环境的条目排在最后。带 `[env]` 前缀是有意为之：不展开子菜单也能一眼分辨生产与靶机。
+
+**托盘与 CLI 共用同一份 `~/.ssh/config`**——命令行里 `yssh add` 添加的主机会立刻出现在托盘菜单中，反之亦然。两者不是两套数据。
+
+连接默认在 **Windows Terminal 的新标签页**打开（`wt -w 0 nt ssh <别名>`），终端行为与手动敲 `ssh` 完全一致；未安装 Windows Terminal 时自动回退到系统默认方式。
+
+---
+
 ## 用法
 
 | 命令 | 说明 |
@@ -135,17 +192,23 @@ docker run --rm yssh-dev
 ## 项目结构
 
 ```
-cmd/yssh/              命令行入口与命令实现
-internal/meta/         # yssh: 元数据注释的解析与生成
+cmd/yssh/              命令行入口与全部子命令
+cmd/ysshtray/          托盘常驻程序（GUI 子系统）
 internal/session/      ~/.ssh/config 的读取、写入与 ssh -G 解析
+internal/meta/         # yssh: 元数据注释的解析与生成
 internal/search/       四级模糊匹配与编辑距离
 internal/history/      ~/.yssh/history.json（最近使用排序）
 internal/backend/      连接后端接口与 ssh 实现
+internal/launcher/     把连接交给 Windows Terminal 执行
+internal/tray/         托盘菜单、事件分发、图标生成
+internal/install/      自安装：注册表、PATH、卸载登记
+internal/dialog/       原生消息框（仅依赖 user32.dll）
 internal/term/         窗口标题、颜色、显示宽度计算
 docs/DESIGN.md         完整技术设计文档
+docs/BRANCHING.md      分支规范与回滚手册
 ```
 
-**零第三方依赖**，只用标准库。编译产物是单个约 5MB 的静态二进制。
+除托盘库 `fyne.io/systray` 外不引入其它第三方依赖，且以 `CGO_ENABLED=0` 编译——产物是两个单文件二进制（各约 3.2MB），不需要任何运行时。
 
 ---
 
@@ -160,10 +223,13 @@ docs/DESIGN.md         完整技术设计文档
 
 ## 状态
 
-**Step 1 已完成**：会话库 + 模糊搜索 + 密钥认证连接。
+**已交付**
 
-后续路线（见 `docs/DESIGN.md` 第 14 章）：
+- **Step 1** — 会话库 + 四级模糊搜索 + 密钥认证连接
+- **Step 2** — 托盘常驻程序 + 自安装（无需管理员权限，可开机自启）
 
-- **Step 2** — 密码层：Windows Credential Manager 存凭据 + `plink` 后端 + 环境色带
-- **Step 3** — 自研 SSH 客户端：密码仅存内存，顺带获得 SFTP 与隧道能力
-- **Step 4** — 批量导入（nmap / CSV）、批量执行、标签过滤、TUI 前端
+当前版本 `v0.2.0`。后续路线见 [`docs/DESIGN.md`](docs/DESIGN.md) 第 14 章：
+
+- **Step 3** — 密码层：Windows Credential Manager 存凭据 + `plink` 后端 + 环境色带
+- **Step 4** — 自研 SSH 客户端：密码仅存内存，顺带获得 SFTP 与隧道能力
+- **Step 5** — 批量导入（nmap / CSV）、批量执行、标签过滤
