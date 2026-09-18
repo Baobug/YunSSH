@@ -1,0 +1,9 @@
+# 统一换行风格。
+#
+# 必须显式锁定为 LF：Windows 上 core.autocrlf=true 会在检出时把文件转成 CRLF，
+# 而 shell 脚本带 CRLF 后在 Linux 容器中会因 "bad interpreter: /usr/bin/env bash^M"
+# 直接无法执行，端到端验证会整个失效。
+* text=auto eol=lf
+
+# Windows 批处理保留 CRLF，兼容性更好。
+*.bat text eol=crlf

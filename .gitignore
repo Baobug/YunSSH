@@ -1,0 +1,5 @@
+/yssh
+/yssh.exe
+*.test
+
+.workbuddy/
