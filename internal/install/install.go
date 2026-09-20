@@ -46,6 +46,7 @@ type Result struct {
 	Files          []string
 	AutoStart      bool
 	PathUpdated    bool
+	StartMenu      bool
 	UninstallEntry bool
 }
 
@@ -136,6 +137,12 @@ func Install(opts Options) (*Result, error) {
 	}
 	result.UninstallEntry = true
 
+	// 没有这一步，开始菜单里就找不到它——Windows 只索引 .lnk
+	if err := createStartMenuShortcut(trayPath); err != nil {
+		return nil, err
+	}
+	result.StartMenu = true
+
 	if opts.AutoStart {
 		if err := setAutoStart(trayPath, true); err != nil {
 			return nil, err
@@ -175,6 +182,10 @@ func Uninstall() error {
 	broadcastEnvChange()
 
 	if err := removeUninstallEntry(); err != nil {
+		return err
+	}
+
+	if err := removeStartMenuShortcut(); err != nil {
 		return err
 	}
 
