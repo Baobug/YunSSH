@@ -47,10 +47,11 @@ const (
 
 // LinkFlags 位定义，只列出本文件用到的几个。
 const (
-	flagHasLinkInfo     = 0x00000002
-	flagHasWorkingDir   = 0x00000010
-	flagHasIconLocation = 0x00000040
-	flagIsUnicode       = 0x00000080
+	flagHasLinkTargetIDList = 0x00000001
+	flagHasLinkInfo         = 0x00000002
+	flagHasWorkingDir       = 0x00000010
+	flagHasIconLocation     = 0x00000040
+	flagIsUnicode           = 0x00000080
 )
 
 // ShowCommand 取值：1 = SW_SHOWNORMAL
@@ -134,10 +135,16 @@ func (p Place) Create(trayExe string) error {
 		return fmt.Errorf("创建%s目录失败: %w", p, err)
 	}
 
+	idlist, err := linkTargetIDList(trayExe)
+	if err != nil {
+		return fmt.Errorf("解析%s快捷方式的目标失败: %w", p, err)
+	}
+
 	link := buildShellLink(
 		trayExe,
 		filepath.Dir(trayExe),
 		trayExe+",0", // 图标取自 exe 自身的第一个图标组
+		idlist,
 		swShowNormal,
 	)
 
@@ -191,8 +198,14 @@ func notifyShell() {
 //
 // 直接写二进制而不借助 COM 或 PowerShell，有两个原因：不引入额外依赖，
 // 以及安装过程不需要启动外部进程。格式本身是固定的，写对一次就长期稳定。
-func buildShellLink(target, workingDir, iconLocation string, showCommand uint32) []byte {
+//
+// idlist 是外壳给出的目标标识，由 linkTargetIDList 取得。它为快捷方式提供了
+// 外壳能直接读懂的目标描述，缺了它外壳认不出目标，图标会退化成空白。
+func buildShellLink(target, workingDir, iconLocation string, idlist []byte, showCommand uint32) []byte {
 	flags := uint32(flagHasLinkInfo | flagIsUnicode)
+	if len(idlist) > 0 {
+		flags |= flagHasLinkTargetIDList
+	}
 	if workingDir != "" {
 		flags |= flagHasWorkingDir
 	}
@@ -217,6 +230,13 @@ func buildShellLink(target, workingDir, iconLocation string, showCommand uint32)
 	writeU16(&buf, 0) // Reserved1
 	writeU32(&buf, 0) // Reserved2
 	writeU32(&buf, 0) // Reserved3
+
+	// --- LinkTargetIDList ---
+	// 长度字段写的是后面 IDList 本身的字节数（已含列表末尾的终止项）
+	if len(idlist) > 0 {
+		writeU16(&buf, uint16(len(idlist)))
+		buf.Write(idlist)
+	}
 
 	// --- LinkInfo ---
 	buf.Write(buildLinkInfo(target))
