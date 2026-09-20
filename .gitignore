@@ -1,10 +1,17 @@
 /yssh
 /yssh.exe
 /ysshtray.exe
+*~
 *.test
 
 # tools/genicon 的产物：图标与 Windows 资源对象都由源码现生成
 /app.ico
 rsrc_windows_*.syso
+
+# tools/icondump 的产物：拆出来的各档尺寸 PNG，供肉眼核对图标
+/icondump/
+
+# 临时构建目录
+/build/
 
 .workbuddy/
