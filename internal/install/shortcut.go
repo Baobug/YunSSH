@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"syscall"
 	"unicode/utf16"
 
 	"golang.org/x/sys/windows/registry"
@@ -143,6 +144,8 @@ func (p Place) Create(trayExe string) error {
 	if err := os.WriteFile(path, link, 0o644); err != nil {
 		return fmt.Errorf("写入%s快捷方式失败: %w", p, err)
 	}
+
+	notifyShell()
 	return nil
 }
 
@@ -155,7 +158,33 @@ func (p Place) Remove() error {
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("删除%s快捷方式失败: %w", p, err)
 	}
+
+	notifyShell()
 	return nil
+}
+
+// notifyShell 通知外壳「关联信息已变更」，促使它重新扫描开始菜单与桌面。
+//
+// 这一步不能省。直接往磁盘写 .lnk 只是放了个文件，外壳有自己的索引——
+// 不同步通知的话，开始菜单不会刷新，用户看到的仍然是"装完了但哪都没有"。
+// SHCNE_ASSOCCHANGED 是让外壳重读快捷方式集合的标准方式，
+// 安装程序普遍在创建快捷方式后调用它。
+func notifyShell() {
+	const (
+		shcneAssocChanged = 0x08000000
+		shcnfIdList       = 0x0000
+		shcnfFlush        = 0x1000
+	)
+
+	shell32 := syscall.NewLazyDLL("shell32.dll")
+	proc := shell32.NewProc("SHChangeNotify")
+
+	_, _, _ = proc.Call(
+		shcneAssocChanged,
+		shcnfIdList|shcnfFlush, // FLUSH 让调用返回前就把变更广播出去
+		0,
+		0,
+	)
 }
 
 // buildShellLink 按 MS-SHLLINK 规范构造一个 .lnk 文件的内容。
