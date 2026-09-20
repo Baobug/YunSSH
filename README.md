@@ -149,16 +149,6 @@ Host prod-web
 
 ---
 
-## 状态
-
-**已交付**：Step 1（会话库 + 四级模糊搜索 + 密钥认证）、Step 2（托盘常驻 + 自安装）
-
-当前版本 `v0.2.4`。后续路线见 [`docs/DESIGN.md`](docs/DESIGN.md) 第 14 章：密码层 → 自研 SSH 客户端 → 批量运维。
-
-开发分支模型与回滚方式见 [`docs/BRANCHING.md`](docs/BRANCHING.md)。
-
----
-
 ## 许可与版权
 
 **Apache License 2.0**，全文见 [`LICENSE`](LICENSE)；著作权归 **Zhou Tianbao (Baobug)**，2026 年。
