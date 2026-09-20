@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Zhou Tianbo (Baobug)
+// SPDX-License-Identifier: Apache-2.0
+
 // Package appicon 用代码生成 YunSSH 的应用图标。
 //
 // 图标完全由参数光栅化得到，仓库里因此不需要存放任何图片文件；

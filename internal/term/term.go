@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Zhou Tianbo (Baobug)
+// SPDX-License-Identifier: Apache-2.0
+
 // Package term 负责终端相关的呈现细节：窗口标题、环境徽章与显示宽度计算。
 //
 // 所有输出都使用 ANSI 转义序列，不修改远端机器的任何配置。

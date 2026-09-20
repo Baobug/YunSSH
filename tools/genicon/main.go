@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Zhou Tianbo (Baobug)
+// SPDX-License-Identifier: Apache-2.0
+
 // Command genicon 生成 YunSSH 的图标文件与 Windows 资源对象。
 //
 // 在仓库内任意目录执行：

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Zhou Tianbo (Baobug)
+// SPDX-License-Identifier: Apache-2.0
+
 // Package history 记录主机别名的使用情况，用于「最近使用优先」排序。
 //
 // 数据保存在 ~/.yssh/history.json。这属于非关键数据：

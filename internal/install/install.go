@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Zhou Tianbo (Baobug)
+// SPDX-License-Identifier: Apache-2.0
+
 //go:build windows
 
 // Package install 实现 YunSSH 的自安装与卸载。

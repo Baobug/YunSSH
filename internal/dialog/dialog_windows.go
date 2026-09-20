@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Zhou Tianbo (Baobug)
+// SPDX-License-Identifier: Apache-2.0
+
 //go:build windows
 
 // Package dialog 提供最简的 Windows 原生对话框。
