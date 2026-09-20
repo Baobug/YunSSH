@@ -22,7 +22,10 @@ import (
 func cmdInstall(args []string) int {
 	autoStart := false
 	addToPath := true
+	desktop := false
 	askAutoStart := true
+	askDesktop := true
+	assumeYes := false
 
 	for _, a := range args {
 		switch a {
@@ -30,21 +33,30 @@ func cmdInstall(args []string) int {
 			autoStart, askAutoStart = true, false
 		case "--no-autostart":
 			autoStart, askAutoStart = false, false
+		case "--desktop":
+			desktop, askDesktop = true, false
+		case "--no-desktop":
+			desktop, askDesktop = false, false
 		case "--no-path":
 			addToPath = false
 		case "-y", "--yes":
-			// 保持与 uninstall 一致的参数习惯，安装本身无需确认
+			// 非交互模式：不再逐项询问，一律取默认值
+			assumeYes = true
 		}
 	}
 
-	if askAutoStart {
+	if askAutoStart && !assumeYes {
 		autoStart = askYesNo("是否设置开机自启？", true)
+	}
+	if askDesktop && !assumeYes {
+		desktop = askYesNo("是否在桌面创建快捷方式？", false)
 	}
 
 	result, err := install.Install(install.Options{
-		AutoStart: autoStart,
-		AddToPath: addToPath,
-		Version:   yunssh.Version,
+		AutoStart:       autoStart,
+		AddToPath:       addToPath,
+		DesktopShortcut: desktop,
+		Version:         yunssh.Version,
 	})
 	if err != nil {
 		errf("%v", err)
@@ -62,6 +74,9 @@ func cmdInstall(args []string) int {
 	}
 	if result.StartMenu {
 		hintf("  开始菜单    已创建快捷方式")
+	}
+	if result.DesktopShortcut {
+		hintf("  桌面        已创建快捷方式")
 	}
 	if result.PathUpdated {
 		hintf("  PATH        已加入，重新打开终端后 yssh 可直接使用")

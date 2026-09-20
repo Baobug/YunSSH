@@ -12,10 +12,30 @@ import (
 	"os"
 	"path/filepath"
 	"unicode/utf16"
+
+	"golang.org/x/sys/windows/registry"
 )
 
-// 开始菜单里显示的名字。
+// 快捷方式显示的名字。
 const shortcutName = "YunSSH"
+
+// Place 表示快捷方式放在哪里。
+type Place int
+
+const (
+	// PlaceStartMenu 是开始菜单的「程序」目录。
+	PlaceStartMenu Place = iota
+	// PlaceDesktop 是当前用户的桌面。
+	PlaceDesktop
+)
+
+// String 返回用于提示文案的位置名称。
+func (p Place) String() string {
+	if p == PlaceDesktop {
+		return "桌面"
+	}
+	return "开始菜单"
+}
 
 // Shell Link 的固定头部大小与 CLSID（MS-SHLLINK 2.1）。
 const (
@@ -44,18 +64,54 @@ func StartMenuDir() (string, error) {
 	return filepath.Join(appData, "Microsoft", "Windows", "Start Menu", "Programs"), nil
 }
 
-// ShortcutPath 返回开始菜单中快捷方式的完整路径。
-func ShortcutPath() (string, error) {
-	dir, err := StartMenuDir()
+// DesktopDir 返回当前用户的桌面目录。
+//
+// 桌面位置可能被重定向（OneDrive 接管、组策略调整等），所以优先读注册表里
+// 的记录，读不到再回退到 %USERPROFILE%\Desktop。直接拼 %USERPROFILE%\Desktop
+// 在这类环境里会指向一个并不存在的目录——快捷方式写了，用户却看不到。
+func DesktopDir() (string, error) {
+	const keyPath = `Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders`
+
+	if key, err := registry.OpenKey(registry.CURRENT_USER, keyPath, registry.QUERY_VALUE); err == nil {
+		value, _, readErr := key.GetStringValue("Desktop")
+		key.Close()
+
+		if readErr == nil && value != "" {
+			// 存的是 REG_EXPAND_SZ，需要展开 %USERPROFILE% 这类变量
+			if expanded, expandErr := registry.ExpandString(value); expandErr == nil {
+				return expanded, nil
+			}
+			return value, nil
+		}
+	}
+
+	home := os.Getenv("USERPROFILE")
+	if home == "" {
+		return "", errors.New("无法确定桌面路径")
+	}
+	return filepath.Join(home, "Desktop"), nil
+}
+
+// Dir 返回该位置对应的目录。
+func (p Place) Dir() (string, error) {
+	if p == PlaceDesktop {
+		return DesktopDir()
+	}
+	return StartMenuDir()
+}
+
+// Path 返回快捷方式的完整路径。
+func (p Place) Path() (string, error) {
+	dir, err := p.Dir()
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(dir, shortcutName+".lnk"), nil
 }
 
-// StartMenuShortcutExists 报告开始菜单快捷方式是否存在。
-func StartMenuShortcutExists() bool {
-	path, err := ShortcutPath()
+// Exists 报告该位置的快捷方式是否已存在。
+func (p Place) Exists() bool {
+	path, err := p.Path()
 	if err != nil {
 		return false
 	}
@@ -63,41 +119,41 @@ func StartMenuShortcutExists() bool {
 	return err == nil
 }
 
-// createStartMenuShortcut 创建（或覆盖）开始菜单快捷方式。
+// Create 创建（或覆盖）快捷方式。
 //
-// 快捷方式指向托盘程序而不是 CLI：从开始菜单点开应当直接进入托盘，
+// 快捷方式指向托盘程序而不是 CLI：从这里点开应当直接进入托盘，
 // 而不是弹出一个命令行窗口。
-func createStartMenuShortcut(trayExe string) error {
-	path, err := ShortcutPath()
+func (p Place) Create(trayExe string) error {
+	path, err := p.Path()
 	if err != nil {
 		return err
 	}
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("创建开始菜单目录失败: %w", err)
+		return fmt.Errorf("创建%s目录失败: %w", p, err)
 	}
 
 	link := buildShellLink(
 		trayExe,
 		filepath.Dir(trayExe),
-		trayExe+",0", // 图标取自 exe 自身的第 0 号资源
+		trayExe+",0", // 图标取自 exe 自身的第一个图标组
 		swShowNormal,
 	)
 
 	if err := os.WriteFile(path, link, 0o644); err != nil {
-		return fmt.Errorf("写入开始菜单快捷方式失败: %w", err)
+		return fmt.Errorf("写入%s快捷方式失败: %w", p, err)
 	}
 	return nil
 }
 
-// removeStartMenuShortcut 删除开始菜单快捷方式。
-func removeStartMenuShortcut() error {
-	path, err := ShortcutPath()
+// Remove 删除快捷方式。文件不存在时视为成功。
+func (p Place) Remove() error {
+	path, err := p.Path()
 	if err != nil {
 		return err
 	}
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("删除开始菜单快捷方式失败: %w", err)
+		return fmt.Errorf("删除%s快捷方式失败: %w", p, err)
 	}
 	return nil
 }

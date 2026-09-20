@@ -43,18 +43,24 @@ type Options struct {
 	AutoStart bool
 	// AddToPath 表示是否把安装目录加入用户 PATH。
 	AddToPath bool
+	// DesktopShortcut 表示是否在桌面创建快捷方式。
+	//
+	// 默认关闭：开始菜单里已经有入口，桌面上再放一个对多数人是噪音。
+	// 需要的人可以在安装时勾选，或用 yssh install --desktop 显式要求。
+	DesktopShortcut bool
 	// Version 会显示在「应用和功能」里。
 	Version string
 }
 
 // Result 描述安装结果，供调用方展示。
 type Result struct {
-	Dir            string
-	Files          []string
-	AutoStart      bool
-	PathUpdated    bool
-	StartMenu      bool
-	UninstallEntry bool
+	Dir             string
+	Files           []string
+	AutoStart       bool
+	PathUpdated     bool
+	StartMenu       bool
+	DesktopShortcut bool
+	UninstallEntry  bool
 }
 
 // DefaultDir 返回默认安装目录 %LOCALAPPDATA%\Programs\YunSSH。
@@ -154,10 +160,17 @@ func Install(opts Options) (*Result, error) {
 	result.UninstallEntry = true
 
 	// 没有这一步，开始菜单里就找不到它——Windows 只索引 .lnk
-	if err := createStartMenuShortcut(trayPath); err != nil {
+	if err := PlaceStartMenu.Create(trayPath); err != nil {
 		return nil, err
 	}
 	result.StartMenu = true
+
+	if opts.DesktopShortcut {
+		if err := PlaceDesktop.Create(trayPath); err != nil {
+			return nil, err
+		}
+		result.DesktopShortcut = true
+	}
 
 	if opts.AutoStart {
 		if err := setAutoStart(trayPath, true); err != nil {
@@ -201,8 +214,12 @@ func Uninstall() error {
 		return err
 	}
 
-	if err := removeStartMenuShortcut(); err != nil {
-		return err
+	// 两个位置都清一遍，不管当初有没有创建过：
+	// 用户可能事后自己加过，或从更早的版本升级上来。
+	for _, place := range []Place{PlaceStartMenu, PlaceDesktop} {
+		if err := place.Remove(); err != nil {
+			return err
+		}
 	}
 
 	return scheduleDirRemoval(dir)
