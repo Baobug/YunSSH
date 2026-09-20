@@ -10,6 +10,7 @@ import (
 
 	"fyne.io/systray"
 
+	"github.com/Baobug/YunSSH/internal/appicon"
 	"github.com/Baobug/YunSSH/internal/dialog"
 	"github.com/Baobug/YunSSH/internal/launcher"
 	"github.com/Baobug/YunSSH/internal/session"
@@ -68,7 +69,7 @@ func (a *App) Run() {
 //	────────────
 //	关于 / 退出
 func (a *App) onReady() {
-	systray.SetIcon(BuildIcon())
+	systray.SetIcon(appicon.ICO())
 	systray.SetTooltip("YunSSH — SSH 会话管理")
 
 	// 主机放在子菜单里：刷新时只需重建子菜单内容，静态项的位置不受影响。

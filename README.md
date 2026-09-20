@@ -47,6 +47,8 @@ $ yssh web
 go build -trimpath -o yssh.exe ./cmd/yssh
 ```
 
+Windows 上要一并构建带图标的两个可执行文件时，直接跑仓库根的 `build.bat`：它会先由 `tools/genicon` 生成图标与资源对象，再产出 `yssh.exe` 和 `ysshtray.exe`。
+
 把 `yssh.exe` 放进 `PATH`，然后：
 
 ```bash
@@ -200,7 +202,8 @@ internal/search/       四级模糊匹配与编辑距离
 internal/history/      ~/.yssh/history.json（最近使用排序）
 internal/backend/      连接后端接口与 ssh 实现
 internal/launcher/     把连接交给 Windows Terminal 执行
-internal/tray/         托盘菜单、事件分发、图标生成
+internal/tray/         托盘菜单、事件分发
+internal/appicon/      图标绘制、多尺寸 ICO、Windows 资源对象
 internal/install/      自安装：注册表、PATH、卸载登记
 internal/dialog/       原生消息框（仅依赖 user32.dll）
 internal/term/         窗口标题、颜色、显示宽度计算

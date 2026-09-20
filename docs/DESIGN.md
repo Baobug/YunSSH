@@ -204,7 +204,8 @@ Host hk-jump
 | `backend` | `internal/backend` | 连接后端接口 + 实现（ssh / plink / native） | `session` |
 | `search` | `internal/search` | 模糊匹配与排序 | `session` |
 | `launcher` | `internal/launcher` | 把 ssh 命令行交给 Windows Terminal 执行 | 无 |
-| `tray` | `internal/tray` | 托盘菜单构建、事件分发、图标生成 | `systray` `session` `launcher` |
+| `appicon` | `internal/appicon` | 图标绘制、多尺寸 ICO 编码、Windows 资源对象 | 无 |
+| `tray` | `internal/tray` | 托盘菜单构建、事件分发 | `systray` `appicon` `session` `launcher` |
 | `install` | `internal/install` | 自安装：文件复制、注册表、PATH、卸载登记 | `registry` |
 | `dialog` | `internal/dialog` | 原生消息框（仅 `user32.dll`） | 无 |
 | `term` | `internal/term` | 终端标题、环境色带、密码提示、宽度探测 | `x/term` |
@@ -800,13 +801,33 @@ YunSSH/
 1. 必须用 `SetExpandStringValue` 写回。用户 PATH 里常含 `%USERPROFILE%` 这类变量，若写成普通字符串会丢失展开语义，等于悄悄改坏别人的环境。
 2. 改完必须广播 `WM_SETTINGCHANGE`。否则已运行的资源管理器不会刷新环境块，用户新开的终端仍读不到更新后的 PATH。
 
-### 19.4 一个容易忽略的编译约束
+### 19.4 应用图标全部由代码生成
+
+仓库里没有任何图片文件：图标由 `internal/appicon` 按参数逐像素绘制，再编码成多尺寸 ICO。配色、圆角、字形都是包里的常量，改完重新构建即可。
+
+**为什么要多尺寸，而不是只存一张 32x32**
+
+托盘槽位随显示缩放变化（100% / 125% / 150% / 200% 分别是 16 / 20 / 24 / 32）。ICO 里若只有单一尺寸，系统只能自己做**非整数**缩放——32 缩到 24 是 0.75 倍，折线笔画本来就只有几像素宽，重采样后边缘会糊成一片。现在收录 16 到 256 共八档，每档都是原生绘制，且小尺寸单独放大字形、加粗笔画做光学补偿。
+
+**exe 图标怎么进去的**
+
+`tools/genicon` 生成 `.syso`（一个只含 `.rsrc` 段的 COFF 目标文件），放在 `cmd/yssh` 与 `cmd/ysshtray` 目录下，`go build` 会自动把它链接进 exe。这样既不需要 `rsrc` / `go-winres` 之类的工具，也不必往仓库里放二进制产物（`.syso` 与 `app.ico` 都在 `.gitignore` 里）。
+
+生成 `.syso` 有三个约束，不写下来一定会踩：
+
+1. **段特性必须恰好是** `IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_READ`。Go 链接器用特性位判断段类型，多带一个 `IMAGE_SCN_MEM_DISCARDABLE` 会导致整段被跳过，图标静默消失。
+2. **资源目录里每个目录的条目数组必须紧贴它的头部。** `IMAGE_RESOURCE_DIRECTORY` 结构体里没有「条目数组偏移」字段，读取方固定按 `目录偏移 + 16` 定位条目；把头部和条目拆成两片区域分别排布会产出非法结构。
+3. **数据条目的 `OffsetToData` 必须是 RVA，而段内偏移转 RVA 需要链接期才知道的段基址。** 因此要为每个数据偏移字段补一条 `IMAGE_REL_AMD64_ADDR32` 重定位：链接器读取该位置上的原值作为加数、再加上段基址回写，正好完成换算。
+
+`.syso` 按 `rsrc_windows_amd64.syso` 命名，交叉编译到其它平台时会被 `go build` 自动忽略，不影响 Docker 里的 Linux 验证流程。
+
+### 19.5 一个容易忽略的编译约束
 
 托盘库在 Windows 下是纯 Go 实现，但**在其它平台需要 CGO（GTK）**。因此 `internal/tray`、`internal/install`、`cmd/ysshtray` 全部带 `//go:build windows`；`cmd/yssh` 的安装命令用 `cmd_install_windows.go` / `cmd_install_other.go` 两个文件承载，保证非 Windows 平台仍可编译。
 
 构建时必须设 `CGO_ENABLED=0`，否则会破坏单文件分发的目标。
 
-### 19.5 验证结果（2026-09-18）
+### 19.6 验证结果（2026-09-18）
 
 | 项 | 结果 |
 |---|---|
