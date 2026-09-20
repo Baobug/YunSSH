@@ -2,7 +2,7 @@
 
 Windows 终端的 SSH 会话管理工具。
 
-把 `ssh root@1.2.3.4 -p 2222` 变成 `yssh web`。
+把 `ssh root@1.2.3.4 -p 2222` 变成 `yssh ALIAS`。
 
 ```console
 $ yssh
@@ -10,7 +10,7 @@ ENV   ALIAS      TARGET                   TAGS     LAST
 prod  prod-web   root@1.2.3.4:2222        web,hk   2h ago
 lab   lab-msf    msfadmin@192.168.78.129           just now
 
-$ yssh web
+$ yssh prod-web
 → prod-web
 ```
 
