@@ -62,8 +62,12 @@ v0.1.0        v0.1.1
 | 标签 | 对应阶段 |
 |---|---|
 | `v0.1.x` | Step 1 —— 会话库 + 模糊搜索 + 密钥认证 |
-| `v0.2.x` | Step 2 —— 密码层（Credential Manager + plink） |
-| `v0.3.x` | Step 3 —— 自研 SSH 客户端 |
+| `v0.2.x` | Step 2 —— 托盘常驻程序 + 自安装 |
+| `v0.3.x` | Step 3 —— 密码层（Credential Manager + plink） |
+| `v0.4.x` | Step 4 —— 自研 SSH 客户端 |
+| `v0.5.x` | Step 5 —— 批量导入与批量执行 |
+
+Step 的完整定义见 [`README.md`](../README.md) 的「状态」一节。
 
 ---
 
@@ -92,14 +96,14 @@ git push origin dev
 git checkout main
 git pull --ff-only
 
-git merge --no-ff dev -m 'release: v0.2.0 —— 密码层
+git merge --no-ff dev -m 'release: v0.2.1 —— 图标修复与许可规范化
 
 <发布说明：新增/修复了什么，验证状态>'
 
-git tag -a v0.2.0 -m 'Step 2：Windows 凭据管理器 + plink 密码后端'
+git tag -a v0.2.1 -m 'Step 2 修订：多尺寸应用图标与许可规范化'
 
 git push origin main
-git push origin v0.2.0
+git push origin v0.2.1
 ```
 
 **发布前检查清单**
@@ -224,7 +228,7 @@ git push private dev
 ```bash
 git checkout main
 git merge --squash dev
-git commit -m 'release: v0.2.0 —— 密码层'
+git commit -m 'release: v0.2.1 —— 图标修复'
 ```
 
 代价是 `main` 失去细粒度回溯能力（只能回滚到版本节点，不能回滚单个功能提交）。

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Zhou Tianbo (Baobug)
+// SPDX-License-Identifier: Apache-2.0
+
 // Package search 实现主机别名的模糊匹配。
 //
 // 匹配分四级，优先级由高到低：完全相等、前缀、子串、子序列（fzf 风格）。

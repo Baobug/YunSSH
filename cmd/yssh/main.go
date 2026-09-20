@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Zhou Tianbo (Baobug)
+// SPDX-License-Identifier: Apache-2.0
+
 // Command yssh 是面向 Windows 终端的 SSH 会话管理工具。
 //
 // 它不替代 ssh，而是作为加速录入层：会话信息存放在标准的 ~/.ssh/config 中，

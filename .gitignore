@@ -3,4 +3,8 @@
 /ysshtray.exe
 *.test
 
+# tools/genicon 的产物：图标与 Windows 资源对象都由源码现生成
+/app.ico
+rsrc_windows_*.syso
+
 .workbuddy/

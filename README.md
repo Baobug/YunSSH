@@ -47,6 +47,8 @@ $ yssh web
 go build -trimpath -o yssh.exe ./cmd/yssh
 ```
 
+Windows 上要一并构建带图标的两个可执行文件时，直接跑仓库根的 `build.bat`：它会先由 `tools/genicon` 生成图标与资源对象，再产出 `yssh.exe` 和 `ysshtray.exe`。
+
 把 `yssh.exe` 放进 `PATH`，然后：
 
 ```bash
@@ -200,7 +202,8 @@ internal/search/       四级模糊匹配与编辑距离
 internal/history/      ~/.yssh/history.json（最近使用排序）
 internal/backend/      连接后端接口与 ssh 实现
 internal/launcher/     把连接交给 Windows Terminal 执行
-internal/tray/         托盘菜单、事件分发、图标生成
+internal/tray/         托盘菜单、事件分发
+internal/appicon/      图标绘制、多尺寸 ICO、Windows 资源对象
 internal/install/      自安装：注册表、PATH、卸载登记
 internal/dialog/       原生消息框（仅依赖 user32.dll）
 internal/term/         窗口标题、颜色、显示宽度计算
@@ -208,7 +211,7 @@ docs/DESIGN.md         完整技术设计文档
 docs/BRANCHING.md      分支规范与回滚手册
 ```
 
-除托盘库 `fyne.io/systray` 外不引入其它第三方依赖，且以 `CGO_ENABLED=0` 编译——产物是两个单文件二进制（各约 3.2MB），不需要任何运行时。
+除托盘库 `fyne.io/systray` 外不引入其它第三方依赖，且以 `CGO_ENABLED=0` 编译——产物是两个单文件二进制（各约 3.2MB），不需要任何运行时。第三方组件的版权声明见 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)。
 
 ---
 
@@ -228,8 +231,25 @@ docs/BRANCHING.md      分支规范与回滚手册
 - **Step 1** — 会话库 + 四级模糊搜索 + 密钥认证连接
 - **Step 2** — 托盘常驻程序 + 自安装（无需管理员权限，可开机自启）
 
-当前版本 `v0.2.0`。后续路线见 [`docs/DESIGN.md`](docs/DESIGN.md) 第 14 章：
+当前版本 `v0.2.1`。后续路线见 [`docs/DESIGN.md`](docs/DESIGN.md) 第 14 章：
 
 - **Step 3** — 密码层：Windows Credential Manager 存凭据 + `plink` 后端 + 环境色带
 - **Step 4** — 自研 SSH 客户端：密码仅存内存，顺带获得 SFTP 与隧道能力
 - **Step 5** — 批量导入（nmap / CSV）、批量执行、标签过滤
+
+---
+
+## 许可与版权
+
+**Apache License 2.0**，全文见 [`LICENSE`](LICENSE)；著作权归 **Zhou Tianbo (Baobug)**，2026 年。
+
+每个源文件头部都带机器可读的 SPDX 标识：
+
+```go
+// SPDX-FileCopyrightText: 2026 Zhou Tianbo (Baobug)
+// SPDX-License-Identifier: Apache-2.0
+```
+
+据此可以商用、可以改完闭源、可以再分发，只需保留版权与许可声明。许可含明示的专利授权与专利报复终止条款，不含商标授权，且与 GPL-2.0 不兼容。
+
+第三方组件 `fyne.io/systray`（Apache-2.0）、`golang.org/x/sys`（BSD-3-Clause）、`github.com/godbus/dbus/v5`（BSD-2-Clause）的代码被静态链接进分发的 exe，其版权声明与许可原文见 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)。

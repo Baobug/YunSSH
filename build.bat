@@ -28,6 +28,14 @@ set CGO_ENABLED=0
 
 echo [*] Using: %GOEXE%
 echo.
+echo [*] Generating icon resources ...
+"%GOEXE%" run ./tools/genicon
+if errorlevel 1 (
+    echo [x] Build failed: icon resources
+    exit /b 1
+)
+echo.
+
 echo [*] Building yssh.exe ...
 "%GOEXE%" build -trimpath -ldflags "-s -w" -o yssh.exe ./cmd/yssh
 if errorlevel 1 (
@@ -46,6 +54,9 @@ echo.
 echo [+] Built:
 echo       %CD%\yssh.exe
 echo       %CD%\ysshtray.exe
+echo.
+echo Note: both exe files carry the application icon. It is produced at build
+echo       time by tools/genicon, so the repository holds no binary assets.
 echo.
 echo Next steps:
 echo   yssh install         Install to %%LOCALAPPDATA%%\Programs\YunSSH

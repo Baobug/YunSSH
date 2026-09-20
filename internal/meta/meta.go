@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Zhou Tianbo (Baobug)
+// SPDX-License-Identifier: Apache-2.0
+
 // Package meta 负责解析与生成内嵌在 ~/.ssh/config 中的 YunSSH 元数据注释。
 //
 // 元数据以注释形式与主机块写在同一文件中，这样删除主机条目时元数据会一同消失，
