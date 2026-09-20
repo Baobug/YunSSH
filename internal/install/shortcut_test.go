@@ -7,6 +7,8 @@ package install
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"testing"
 	"unicode/utf16"
 )
@@ -142,6 +144,64 @@ func TestEncodeStringData(t *testing.T) {
 	// 长度 = 2(计数) + 2×字符数 + 2(终止符)
 	if want := 2 + len(runes)*2 + 2; len(data) != want {
 		t.Errorf("编码长度 = %d，期望 %d", len(data), want)
+	}
+}
+
+// TestDesktopDirIsResolvable 验证能解析出一个真实存在的桌面目录。
+//
+// 这条断言针对一个具体的坑：桌面可能被 OneDrive 或组策略重定向，
+// 此时直接拼 %USERPROFILE%\Desktop 会得到一个并不存在的路径。
+// 快捷方式写进去，用户那边什么也看不到，而且不会有任何报错。
+func TestDesktopDirIsResolvable(t *testing.T) {
+	dir, err := DesktopDir()
+	if err != nil {
+		t.Fatalf("无法确定桌面目录: %v", err)
+	}
+	if dir == "" {
+		t.Fatal("桌面目录为空")
+	}
+	if _, err := os.Stat(dir); err != nil {
+		t.Errorf("解析出的桌面目录 %q 不存在: %v", dir, err)
+	}
+}
+
+// TestPlaceDirsAreDistinct 两个快捷方式位置必须指向不同目录。
+func TestPlaceDirsAreDistinct(t *testing.T) {
+	startMenu, err := PlaceStartMenu.Dir()
+	if err != nil {
+		t.Fatalf("开始菜单目录: %v", err)
+	}
+	desktop, err := PlaceDesktop.Dir()
+	if err != nil {
+		t.Fatalf("桌面目录: %v", err)
+	}
+	if startMenu == desktop {
+		t.Errorf("两个位置不应指向同一目录: %q", startMenu)
+	}
+}
+
+// TestPlacePathUsesShortcutName 验证两个位置的路径都以约定的文件名结尾。
+func TestPlacePathUsesShortcutName(t *testing.T) {
+	want := shortcutName + ".lnk"
+
+	for _, p := range []Place{PlaceStartMenu, PlaceDesktop} {
+		path, err := p.Path()
+		if err != nil {
+			t.Fatalf("%s 路径: %v", p, err)
+		}
+		if got := filepath.Base(path); got != want {
+			t.Errorf("%s 文件名 = %q，期望 %q", p, got, want)
+		}
+	}
+}
+
+// TestPlaceString 验证位置名称，它会被拼进提示文案里。
+func TestPlaceString(t *testing.T) {
+	if got := PlaceStartMenu.String(); got != "开始菜单" {
+		t.Errorf("PlaceStartMenu.String() = %q", got)
+	}
+	if got := PlaceDesktop.String(); got != "桌面" {
+		t.Errorf("PlaceDesktop.String() = %q", got)
 	}
 }
 

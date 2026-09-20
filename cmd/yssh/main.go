@@ -14,12 +14,17 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Baobug/YunSSH"
 	"github.com/Baobug/YunSSH/internal/session"
 	"github.com/Baobug/YunSSH/internal/term"
 )
 
-// version 是工具版本号。
-const version = "0.2.2"
+// 版本号取自根包的 yunssh.Version，由 build.bat 用 -ldflags -X 注入。
+//
+// 这里不再另放一份常量：版本号同时写进 exe 的版本资源（见 internal/appicon）
+// 与本命令的输出，两处必须一致，单一来源才不会漂移。
+// 顺带一个副作用是必要的——cmd/yssh 必须引用根包，链接器才会把它链进来，
+// 否则 -X 会静默失效，版本号永远停在默认值。
 
 // 退出码约定。参见 docs/DESIGN.md 第 8.5 节。
 const (
@@ -60,6 +65,8 @@ func run(args []string) int {
 		return cmdUninstall(args[1:])
 	case "autostart":
 		return cmdAutoStart(args[1:])
+	case "license":
+		return cmdLicense(args[1:])
 	case "run":
 		if len(args) < 2 {
 			errf("用法: yssh run <别名> [透传参数...]")
@@ -70,7 +77,7 @@ func run(args []string) int {
 		printHelp()
 		return exitOK
 	case "version", "-v", "--version":
-		fmt.Printf("yssh %s\n", version)
+		fmt.Printf("yssh %s\n", yunssh.Version)
 		return exitOK
 	}
 
@@ -107,6 +114,7 @@ func printHelp() {
   yssh install                  安装到当前用户目录并常驻托盘
   yssh uninstall                卸载
   yssh autostart [on|off]       查询或切换开机自启
+  yssh license [--full]         查看版权信息与第三方组件许可
 
 add 选项:
   --port <端口>     端口

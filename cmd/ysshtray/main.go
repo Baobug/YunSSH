@@ -24,6 +24,7 @@ import (
 	"syscall"
 	"unsafe"
 
+	"github.com/Baobug/YunSSH"
 	"github.com/Baobug/YunSSH/internal/dialog"
 	"github.com/Baobug/YunSSH/internal/install"
 	"github.com/Baobug/YunSSH/internal/launcher"
@@ -31,8 +32,9 @@ import (
 	"github.com/Baobug/YunSSH/internal/tray"
 )
 
-// version 会写入「应用和功能」的版本信息。
-const version = "0.2.2"
+// 版本号取自根包的 yunssh.Version，由 build.bat 用 -ldflags -X 注入。
+// 这里写进「应用和功能」的卸载项与关于对话框，必须与 exe 版本资源一致，
+// 因此不再另放一份常量。
 
 var (
 	kernel32        = syscall.NewLazyDLL("kernel32.dll")
@@ -104,18 +106,29 @@ func startInteractive() {
 			"是否让 YunSSH 在登录时自动启动并常驻托盘？\n\n"+
 				"稍后也可以在托盘菜单里随时切换。")
 
+		desktop := dialog.Confirm("桌面快捷方式",
+			"是否在桌面也放一个 YunSSH 快捷方式？\n\n"+
+				"开始菜单里已经有一个，桌面图标对多数人是多余的，所以默认不加。")
+
 		if _, err := install.Install(install.Options{
-			AutoStart: autoStart,
-			AddToPath: true,
-			Version:   version,
+			AutoStart:       autoStart,
+			AddToPath:       true,
+			DesktopShortcut: desktop,
+			Version:         yunssh.Version,
 		}); err != nil {
 			dialog.Error("安装失败", err.Error())
 			os.Exit(1)
 		}
 
+		desktopLine := ""
+		if desktop {
+			desktopLine = "· 桌面已创建快捷方式\n"
+		}
+
 		dialog.Info("安装完成",
 			"YunSSH 已安装到：\n"+mustDir()+"\n\n"+
 				"· 托盘区已可以看到它\n"+
+				desktopLine+
 				"· 命令行工具 yssh 已加入 PATH（重新打开终端后生效）\n"+
 				"· 在「设置 → 应用」中可卸载")
 
@@ -136,6 +149,7 @@ func runTray() {
 		OpenSearch:       openSearch,
 		AutoStartEnabled: install.AutoStartEnabled,
 		SetAutoStart:     install.SetAutoStart,
+		Uninstall:        install.Uninstall,
 		Terminal:         launcher.Wt,
 	}
 	app.Run()
@@ -151,7 +165,7 @@ func runCommand(args []string) int {
 	case "autostart":
 		return cmdAutoStart(args[1:])
 	case "version", "--version", "-v":
-		dialog.Info("YunSSH", "ysshtray "+version)
+		dialog.Info("YunSSH", "ysshtray "+yunssh.Version)
 		return 0
 	case "help", "--help", "-h":
 		dialog.Info("YunSSH 托盘程序",
@@ -171,7 +185,9 @@ func runCommand(args []string) int {
 func cmdInstall(args []string) int {
 	quiet := false
 	autoStart := true
+	desktop := false
 	askAutoStart := true
+	askDesktop := true
 
 	for _, a := range args {
 		switch strings.ToLower(a) {
@@ -179,6 +195,10 @@ func cmdInstall(args []string) int {
 			autoStart, askAutoStart = true, false
 		case "--no-autostart":
 			autoStart, askAutoStart = false, false
+		case "--desktop":
+			desktop, askDesktop = true, false
+		case "--no-desktop":
+			desktop, askDesktop = false, false
 		case "--yes", "-y", "--quiet":
 			quiet = true
 		}
@@ -187,11 +207,17 @@ func cmdInstall(args []string) int {
 	if askAutoStart && !quiet {
 		autoStart = dialog.Confirm("开机自启", "是否让 YunSSH 在登录时自动启动并常驻托盘？")
 	}
+	if askDesktop && !quiet {
+		desktop = dialog.Confirm("桌面快捷方式",
+			"是否在桌面也放一个 YunSSH 快捷方式？\n\n"+
+				"开始菜单里已经有一个，桌面图标对多数人是多余的，所以默认不加。")
+	}
 
 	if _, err := install.Install(install.Options{
-		AutoStart: autoStart,
-		AddToPath: true,
-		Version:   version,
+		AutoStart:       autoStart,
+		AddToPath:       true,
+		DesktopShortcut: desktop,
+		Version:         yunssh.Version,
 	}); err != nil {
 		if !quiet {
 			dialog.Error("安装失败", err.Error())

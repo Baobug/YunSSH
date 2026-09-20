@@ -14,7 +14,9 @@
 //	cmd/ysshtray/rsrc_windows_amd64.syso
 //
 // 两个 .syso 会被 go build 自动并入对应的 exe，让资源管理器、任务栏和
-// 「应用和功能」里显示图标本身，而不是 Windows 的默认空白图标。
+// 「应用和功能」里显示图标本身，而不是 Windows 的默认空白图标；同时带上
+// 版本资源，于是「属性 → 详细信息」里能看到版权、产品名与版本号。
+//
 // 它们属于构建产物，已在 .gitignore 中排除。
 package main
 
@@ -24,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/Baobug/YunSSH"
 	"github.com/Baobug/YunSSH/internal/appicon"
 )
 
@@ -56,9 +59,12 @@ func run() error {
 	}
 	fmt.Printf("[+] app.ico  %d 字节，含尺寸 %v\n", len(ico), appicon.Sizes)
 
-	// 两个 exe 用同一份资源对象，图标一致
-	obj := appicon.ResourceObject()
+	// 图标两个 exe 共用，但版本资源里的 OriginalFilename 各不相同，
+	// 所以按目标分别生成一份。
 	for _, dir := range targetDirs {
+		exe := filepath.Base(dir) + ".exe"
+		obj := appicon.ResourceObject(exe, yunssh.Version)
+
 		path := filepath.Join(root, dir, sysoName)
 		if err := writeFile(path, obj); err != nil {
 			return err
@@ -67,7 +73,7 @@ func run() error {
 		if relErr != nil {
 			rel = path
 		}
-		fmt.Printf("[+] %s  %d 字节\n", rel, len(obj))
+		fmt.Printf("[+] %s  %d 字节（%s, v%s）\n", rel, len(obj), exe, yunssh.Version)
 	}
 
 	return nil
