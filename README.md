@@ -68,11 +68,13 @@ yssh autostart on|off           # 随时切换开机自启
 
 ### 从源码构建
 
-需要 Go 1.21+。仓库根的 `build.bat` 会一并生成图标资源并产出两个 exe。
+需要 Go 1.21+。仓库根的 `build.bat` 会生成图标与版本资源、从最新 tag 取版本号注入，再产出两个 exe：
 
 ```bash
-go build -trimpath -o yssh.exe ./cmd/yssh
+build.bat
 ```
+
+直接 `go build ./cmd/yssh` 也能编译，但不会有图标和版本资源，版本号也停在 `0.0.0-dev`——这是刻意的，好让临时构建一眼可辨。
 
 ---
 
@@ -111,6 +113,7 @@ go build -trimpath -o yssh.exe ./cmd/yssh
 | `yssh rm <别名>` | 删除条目，删除前自动备份 |
 | `yssh show <别名>` | 显示 `ssh -G` 解析出的生效配置 |
 | `yssh edit [别名]` | 用编辑器打开配置文件 |
+| `yssh license [--full]` | 查看版权与第三方组件；`--full` 打印许可全文 |
 
 **add 选项**：`--port` `--key` `--env` `--tags` `--note`（`--note` 必须放最后，可含空格）
 
@@ -150,7 +153,7 @@ Host prod-web
 
 **已交付**：Step 1（会话库 + 四级模糊搜索 + 密钥认证）、Step 2（托盘常驻 + 自安装）
 
-当前版本 `v0.2.3`。后续路线见 [`docs/DESIGN.md`](docs/DESIGN.md) 第 14 章：密码层 → 自研 SSH 客户端 → 批量运维。
+当前版本 `v0.2.4`。后续路线见 [`docs/DESIGN.md`](docs/DESIGN.md) 第 14 章：密码层 → 自研 SSH 客户端 → 批量运维。
 
 开发分支模型与回滚方式见 [`docs/BRANCHING.md`](docs/BRANCHING.md)。
 
@@ -161,5 +164,11 @@ Host prod-web
 **Apache License 2.0**，全文见 [`LICENSE`](LICENSE)；著作权归 **Zhou Tianbao (Baobug)**，2026 年。
 
 每个源文件头部带 SPDX 标识，据此可商用、可修改后闭源、可再分发，只需保留版权与许可声明。
+
+**版权信息跟着二进制走**，不依赖使用者手上有没有仓库：
+
+- 两个 exe 内嵌 Windows 版本资源，「属性 → 详细信息」里能看到版权、产品名与版本号
+- `LICENSE` 与 `THIRD-PARTY-NOTICES.md` 以 `go:embed` 编入二进制，安装时一并写到安装目录
+- 随时可用 `yssh license` 看摘要、`yssh license --full` 打印全文——**即使只拿到一个 exe**
 
 第三方组件 `fyne.io/systray`（Apache-2.0）、`golang.org/x/sys`（BSD-3-Clause）、`github.com/godbus/dbus/v5`（BSD-2-Clause）被静态链接进分发的 exe，其版权声明与许可原文见 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)。

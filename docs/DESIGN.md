@@ -838,7 +838,7 @@ YunSSH/
 
 锁名做成了可注入参数，这样单元测试能用独立名字，不会与本地正在运行的托盘冲突。
 
-### 19.6 应用图标全部由代码生成
+### 19.6 应用图标与版本资源全部由代码生成
 
 仓库里没有任何图片文件：图标由 `internal/appicon` 按参数逐像素绘制，再编码成多尺寸 ICO。配色、圆角、字形都是包里的常量，改完重新构建即可。
 
@@ -858,13 +858,44 @@ YunSSH/
 
 `.syso` 按 `rsrc_windows_amd64.syso` 命名，交叉编译到其它平台时会被 `go build` 自动忽略，不影响 Docker 里的 Linux 验证流程。
 
-### 19.7 一个容易忽略的编译约束
+**版本资源：为什么必须有**
+
+只有图标的话，资源管理器「属性 → 详细信息」里一片空白——没有版权、没有产品名、没有版本号。源码头部的 `SPDX-FileCopyrightText` 是注释，而 Go 编译不保留注释，进不了二进制；仓库里的 `LICENSE` 也不会跟着 exe 走。**一个被单独拷走的 exe，就此丢掉了全部权属信息。**
+
+所以资源段里加了第三类资源 `RT_VERSION`（16），内容是 `VS_VERSIONINFO`：四层嵌套（根 → StringFileInfo → StringTable → String），每层都是「长度 + 键名 + 值 + 子层」，键名与文本值一律 UTF-16LE。两个容易写错的地方：
+
+- **`wLength` 只能在子层全部写完之后回填**，因为它含子层的总长度。实现上先占位，序列化完再写回。
+- **`wValueLength` 的语义按层而变**：根层的 `VS_FIXEDFILEINFO` 按**字节数**记，文本层按**字符数且不含结尾 0** 记。混用会让读取方按错误边界取字符串。
+
+版本号由 `build.bat` 用 `-ldflags -X` 注入根包的 `yunssh.Version`，一处定义、三处使用（exe 版本资源、`yssh version`、「应用和功能」的卸载项），不会各写一份而漂移。
+
+取版本号时特意**没用 `git describe`**：本项目的发布 tag 都打在 `main` 的合并提交上，从 `dev` 出发没有可达的 tag，`describe` 会直接失败。改为从 `git tag --sort=-v:refname` 取版本号最大的那个。
+
+**一个静默失效的陷阱**
+
+`-X` 只对**被链接进最终二进制**的包生效。若 `cmd/yssh` 不引用根包，链接器会把根包整个丢掉，`-X` 不报错，版本号就永远停在默认值——首次构建时正是如此，资源读出来是 `0.0.0-dev`。根包同时被 `yssh license` 与版本输出引用，注入才真正生效。
+
+### 19.7 许可文件随二进制分发
+
+Apache-2.0 第 4 条与 BSD 第 2 条都要求**二进制分发时随附许可副本与版权声明**。本程序是单文件分发——用户下载两个 exe，仓库里的 `LICENSE` 与 `THIRD-PARTY-NOTICES.md` 并不在场。
+
+做法是 `go:embed` 把两份文本编进二进制，安装时写到安装目录：
+
+- 两份文本的权威副本必须留在仓库根（GitHub 靠 `LICENSE` 识别许可），而 `go:embed` 只能引用包目录内的文件。所以专门在**模块根**建了 `package yunssh`——它与这两个文件同目录，可直接嵌入，**无需维护第二份要同步的拷贝**。
+- `install.writeLegalFiles` 负责写出；`legal_test.go` 覆盖「文件确实写出」与「内容与嵌入文本逐字节一致」，另有一条断言钉住著作权人署名与三方组件归属——这两段文本嵌进 exe 之后，少了哪一行外面完全看不出来。
+- 顺带提供 `yssh license` / `--full`，只拿到一个 exe 也能调出完整许可。
+
+**升级时的一个固有矛盾**
+
+托盘常驻，`ysshtray.exe` 一直被自己锁着，而 Windows 不允许覆盖正在运行的可执行文件——**升级必须先退出托盘**。原先这个失败会抛出英文的共享冲突错误，看不出该怎么办；现在 `install.isFileBusy` 识别共享/锁冲突（错误码 32 / 33）并提示「请先从托盘菜单退出 YunSSH」。
+
+### 19.8 一个容易忽略的编译约束
 
 托盘库在 Windows 下是纯 Go 实现，但**在其它平台需要 CGO（GTK）**。因此 `internal/tray`、`internal/install`、`cmd/ysshtray` 全部带 `//go:build windows`；`cmd/yssh` 的安装命令用 `cmd_install_windows.go` / `cmd_install_other.go` 两个文件承载，保证非 Windows 平台仍可编译。
 
 构建时必须设 `CGO_ENABLED=0`，否则会破坏单文件分发的目标。
 
-### 19.8 验证结果
+### 19.9 验证结果
 
 **2026-09-18（安装与托盘）**
 
@@ -886,6 +917,19 @@ YunSSH/
 | .lnk 稳定性 | 6 项结构测试全部通过（含 LinkInfo 边界校验） |
 | 单实例 | 第二次获取实例锁被拒绝；释放后可重新获取；不同锁名互不影响 |
 | 端到端 | 安装 → 快捷方式就位 → 卸载 → 快捷方式与目录清理，全部符合预期 |
+
+**2026-09-20（版本资源与许可随附）**
+
+| 项 | 结果 |
+|---|---|
+| 版本资源可读 | 两个 exe 的 `FileVersion` = 0.2.3、`CompanyName` = Baobug、`ProductName` = YunSSH、`LegalCopyright` 含著作权人全名，`OriginalFilename` 按目标正确区分 |
+| 版本注入 | `build.bat` 从最新 tag 注入；`yssh version` 与「应用和功能」的卸载项取同一来源 |
+| 二进制内嵌 | 改动前在 exe 中搜不到 `Copyright` / `Tianbao` / `VS_VERSION_INFO`；改动后三者均可命中 |
+| 许可调取 | `yssh license` 输出摘要；`--full` 输出 14962 字节完整文本（Apache-2.0 正文 + 第三方声明） |
+| 许可写出 | `TestWriteLegalFiles` 通过：两个文件写到安装目录，内容与嵌入文本逐字节一致 |
+| 署名守卫 | `TestEmbeddedLegalContent` 通过：钉住著作权人署名与三个第三方组件归属 |
+| 已知限制 | 托盘运行时 `yssh install` 无法覆盖 `ysshtray.exe`（文件被占用）。现给出明确的退出提示，但升级仍需先退出托盘 |
+| gofmt / vet / test | `gofmt -l` 无输出、`go vet ./...` 无输出、`go test ./...` 全绿 |
 
 ---
 

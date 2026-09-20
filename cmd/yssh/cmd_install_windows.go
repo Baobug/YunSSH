@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Baobug/YunSSH"
 	"github.com/Baobug/YunSSH/internal/install"
 )
 
@@ -43,7 +44,7 @@ func cmdInstall(args []string) int {
 	result, err := install.Install(install.Options{
 		AutoStart: autoStart,
 		AddToPath: addToPath,
-		Version:   version,
+		Version:   yunssh.Version,
 	})
 	if err != nil {
 		errf("%v", err)

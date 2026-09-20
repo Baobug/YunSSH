@@ -21,11 +21,18 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
+
+	"github.com/Baobug/YunSSH"
 )
 
 const (
 	trayExeName = "ysshtray.exe"
 	cliExeName  = "yssh.exe"
+
+	// 随安装写出的许可文件，内容与仓库根的同名文件逐字节一致
+	legalLicense = "LICENSE"
+	legalNotices = "THIRD-PARTY-NOTICES.md"
 )
 
 // Options 描述一次安装。
@@ -120,6 +127,9 @@ func Install(opts Options) (*Result, error) {
 		// 已经在目标位置运行时不复制自身，否则会因文件占用而失败
 		if !samePath(src, dst) {
 			if err := copyFile(src, dst); err != nil {
+				if isFileBusy(err) {
+					return nil, fmt.Errorf("%s 正在运行，无法覆盖；请先从托盘菜单退出 YunSSH，再重新执行安装", name)
+				}
 				return nil, fmt.Errorf("复制 %s 失败: %w", name, err)
 			}
 		}
@@ -129,6 +139,12 @@ func Install(opts Options) (*Result, error) {
 	if len(result.Files) == 0 {
 		return nil, errors.New("安装目录中未找到可安装的程序文件")
 	}
+
+	legal, err := writeLegalFiles(dir)
+	if err != nil {
+		return nil, err
+	}
+	result.Files = append(result.Files, legal...)
 
 	trayPath := filepath.Join(dir, trayExeName)
 
@@ -251,4 +267,47 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	return out.Close()
+}
+
+// writeLegalFiles 把嵌入二进制里的许可文本写到安装目录，返回写出的路径。
+//
+// 许可文件必须跟着二进制走：Apache-2.0 第 4 条与 BSD 第 2 条都要求二进制
+// 分发时随附许可副本与版权声明，而本程序是单文件分发——只装一个 exe 时
+// 仓库里那些文件并不在场。两份文本已嵌入二进制（见根包 yunssh），
+// 因此单独分发一个 exe 也写得出来。
+func writeLegalFiles(dir string) ([]string, error) {
+	files := []struct{ name, body string }{
+		{legalLicense, yunssh.License},
+		{legalNotices, yunssh.ThirdPartyNotices},
+	}
+
+	written := make([]string, 0, len(files))
+	for _, f := range files {
+		dst := filepath.Join(dir, f.name)
+		if err := os.WriteFile(dst, []byte(f.body), 0o644); err != nil {
+			return written, fmt.Errorf("写出 %s 失败: %w", f.name, err)
+		}
+		written = append(written, dst)
+	}
+	return written, nil
+}
+
+// isFileBusy 报告错误是否源于目标文件正被占用。
+//
+// Windows 下覆盖正在运行的可执行文件会得到共享冲突或锁冲突，这是升级时
+// 最常见的失败原因（托盘程序常驻，`ysshtray.exe` 一直被自己锁着），
+// 值得与其它 I/O 错误区分开，给出可操作的提示而不是一句英文报错。
+//
+// 错误码直接写数值：syscall 包在 Windows 上并未导出这两个名字，
+// 而仅为两个常量引入 x/sys 直接依赖并不划算。
+func isFileBusy(err error) bool {
+	var errno syscall.Errno
+	if !errors.As(err, &errno) {
+		return false
+	}
+	const (
+		errSharingViolation = syscall.Errno(32) // ERROR_SHARING_VIOLATION
+		errLockViolation    = syscall.Errno(33) // ERROR_LOCK_VIOLATION
+	)
+	return errno == errSharingViolation || errno == errLockViolation
 }
