@@ -59,6 +59,9 @@ func cmdInstall(args []string) int {
 	} else {
 		hintf("  开机自启    未开启（可用 yssh autostart on 打开）")
 	}
+	if result.StartMenu {
+		hintf("  开始菜单    已创建快捷方式")
+	}
 	if result.PathUpdated {
 		hintf("  PATH        已加入，重新打开终端后 yssh 可直接使用")
 	}

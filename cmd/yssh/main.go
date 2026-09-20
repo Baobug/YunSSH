@@ -19,7 +19,7 @@ import (
 )
 
 // version 是工具版本号。
-const version = "0.2.0"
+const version = "0.2.2"
 
 // 退出码约定。参见 docs/DESIGN.md 第 8.5 节。
 const (

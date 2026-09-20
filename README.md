@@ -69,8 +69,11 @@ yssh web                # 连接
 |---|---|
 | 复制程序 | `%LOCALAPPDATA%\Programs\YunSSH\` |
 | 登记卸载项 | `HKCU\...\Uninstall\YunSSH` → 出现在「设置 → 应用」 |
+| **开始菜单快捷方式** | `%APPDATA%\Microsoft\Windows\Start Menu\Programs\YunSSH.lnk` |
 | 开机自启（可选） | `HKCU\...\CurrentVersion\Run` |
 | 加入 PATH | `HKCU\Environment\Path` |
+
+安装后按 `Win` 键搜索 `YunSSH` 即可找到；托盘程序带单实例保护，重复点击不会出现第二个图标。
 
 安装完成后程序会从安装目录重新拉起，托盘图标随即出现。
 
