@@ -6,12 +6,14 @@ package appicon
 import (
 	"bytes"
 	"encoding/binary"
+	"sort"
 )
 
 // 用到的 Windows 资源类型。
 const (
 	rtIcon      = 3  // RT_ICON：单个图标图像
 	rtGroupIcon = 14 // RT_GROUP_ICON：图标组，决定 exe 显示哪个图标
+	rtVersion   = 16 // RT_VERSION：版本信息，资源管理器「详细信息」读它显示
 )
 
 // resourceLang 是资源的语言 ID。
@@ -61,15 +63,25 @@ const (
 // 段基址，只有链接时才知道，因此这里为每个数据偏移字段补一条
 // IMAGE_REL_AMD64_ADDR32 重定位——链接器读取该位置上的原值作为加数，
 // 再加上段基址回写，正好完成段内偏移到 RVA 的换算。
-func ResourceObject() []byte {
+//
+// originalFilename 会写进版本资源的 OriginalFilename 栏（如 "yssh.exe"），
+// 因此两个 exe 各生成一份；version 形如 "0.2.4"，由构建脚本注入。
+func ResourceObject(originalFilename, version string) []byte {
 	entries := images()
 
-	icons := make([][]byte, len(entries))
+	// RT_ICON 的 ID 从 1 起编号，与 RT_GROUP_ICON 里记录的编号一一对应
+	resources := make([]resource, 0, len(entries)+2)
 	for i, e := range entries {
-		icons[i] = e.data
+		resources = append(resources, resource{
+			typ: rtIcon, id: uint32(i + 1), lang: resourceLang, data: e.data,
+		})
 	}
+	resources = append(resources,
+		resource{typ: rtGroupIcon, id: 1, lang: resourceLang, data: groupIconEntries(entries)},
+		resource{typ: rtVersion, id: 1, lang: resourceLang, data: versionInfo(originalFilename, version)},
+	)
 
-	section, relocSites := buildResourceSection(icons, groupIconEntries(entries))
+	section, relocSites := buildResourceSection(resources)
 
 	var buf bytes.Buffer
 
@@ -178,6 +190,14 @@ func groupIconEntries(entries []imageEntry) []byte {
 	return buf.Bytes()
 }
 
+// resource 是资源段里的一个条目。
+type resource struct {
+	typ  uint32 // 资源类型，如 rtIcon
+	id   uint32 // 同一类型内唯一的编号
+	lang uint32 // 语言 ID
+	data []byte
+}
+
 // buildResourceSection 组装 .rsrc 段的内容，并返回需要重定位的位置，
 // 也就是各数据条目里那个「数据偏移」字段在段内的偏移。
 //
@@ -189,36 +209,65 @@ func groupIconEntries(entries []imageEntry) []byte {
 // 它的头部，不能把头部和条目拆成两片区域分别排布。下面一律以 dirSize 为
 // 步长推进，保证每个目录都是「头部 + 条目」连续存放。
 //
-// 段内布局（偏移均相对段起始，n 为图标图像数量）：
+// 段内布局（偏移均相对段起始，k 为资源类型数、n 为资源条目总数）：
 //
-//	0        根目录                    头部 + 2 个类型条目
-//	32       RT_ICON 的 ID 目录        头部 + n 个条目
-//	48+8n    RT_GROUP_ICON 的 ID 目录  头部 + 1 个条目
-//	72+8n    各图像的「语言」目录      头部 + 1 个条目，每块 24 字节
-//	72+32n   RT_GROUP_ICON 的「语言」目录
-//	96+32n   数据条目 × (n+1)          IMAGE_RESOURCE_DATA_ENTRY
-//	112+48n  数据块，每块按 4 字节对齐
-func buildResourceSection(icons [][]byte, group []byte) (section []byte, relocSites []int) {
-	n := len(icons)
+//	0            根目录                  头部 + k 个类型条目
+//	dirSize(k)   各类型的 ID 目录        依次排布，每块是头部 + 该类型的条目
+//	…            各条目的「语言」目录    每块 24 字节（头部 + 1 个条目）
+//	…            数据条目 × n            IMAGE_RESOURCE_DATA_ENTRY
+//	…            数据块，每块按 4 字节对齐
+func buildResourceSection(resources []resource) (section []byte, relocSites []int) {
+	// 先按「类型升序、同类型内 ID 升序」排好，调用方因此不必关心传入顺序。
+	// 这一步不能省：Windows 在每一层都做二分查找，排错了就找不到资源。
+	sorted := make([]resource, len(resources))
+	copy(sorted, resources)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		if sorted[i].typ != sorted[j].typ {
+			return sorted[i].typ < sorted[j].typ
+		}
+		return sorted[i].id < sorted[j].id
+	})
 
-	offIconIDs := dirSize(2)                            // 32
-	offGroupIDs := offIconIDs + dirSize(n)              // 48+8n
-	offIconLangs := offGroupIDs + dirSize(1)            // 72+8n
-	offGroupLang := offIconLangs + n*dirSize(1)         // 72+32n
-	offDataEntries := offGroupLang + dirSize(1)         // 96+32n
-	offBlobs := offDataEntries + (n+1)*resDataEntrySize // 112+48n
+	// 按类型切成连续段，记下每段覆盖 sorted 的哪一段区间
+	type span struct {
+		typ   uint32
+		start int
+		count int
+	}
+	var spans []span
+	for i := 0; i < len(sorted); {
+		j := i
+		for j < len(sorted) && sorted[j].typ == sorted[i].typ {
+			j++
+		}
+		spans = append(spans, span{typ: sorted[i].typ, start: i, count: j - i})
+		i = j
+	}
+
+	// 各区域的起始偏移
+	typeDirs := make([]int, len(spans))
+	langDirs := make([]int, len(sorted))
+
+	off := dirSize(len(spans))
+	for i, sp := range spans {
+		typeDirs[i] = off
+		off += dirSize(sp.count)
+	}
+	for i := range sorted {
+		langDirs[i] = off
+		off += dirSize(1)
+	}
+	offDataEntries := off
+	offBlobs := offDataEntries + len(sorted)*resDataEntrySize
 
 	// 先排好每块数据的位置：紧跟目录区，每块按 4 字节对齐
-	blobAt := make([]int, n+1)
+	blobAt := make([]int, len(sorted))
 	pos := offBlobs
-	for i, blob := range icons {
+	for i, r := range sorted {
 		pos = align4(pos)
 		blobAt[i] = pos
-		pos += len(blob)
+		pos += len(r.data)
 	}
-	pos = align4(pos)
-	blobAt[n] = pos
-	pos += len(group)
 
 	sec := make([]byte, pos)
 
@@ -241,49 +290,42 @@ func buildResourceSection(icons [][]byte, group []byte) (section []byte, relocSi
 		put32(off+4, uint32(target))
 	}
 
-	// --- 根目录：两个资源类型 ---
-	directory(0, 2)
-	child(resDirHeaderSize, rtIcon, offIconIDs)
-	child(resDirHeaderSize+resDirEntrySize, rtGroupIcon, offGroupIDs)
-
-	// --- 类型层下的 ID 目录 ---
-	directory(offIconIDs, n)
-	for i := range icons {
-		child(offIconIDs+resDirHeaderSize+i*resDirEntrySize,
-			uint32(i+1), offIconLangs+i*dirSize(1))
+	// --- 根目录：各资源类型，按类型 ID 升序 ---
+	directory(0, len(spans))
+	for i, sp := range spans {
+		child(resDirHeaderSize+i*resDirEntrySize, sp.typ, typeDirs[i])
 	}
-	directory(offGroupIDs, 1)
-	child(offGroupIDs+resDirHeaderSize, 1, offGroupLang)
+
+	// --- 类型层下的 ID 目录，同类型内按 ID 升序 ---
+	for i, sp := range spans {
+		directory(typeDirs[i], sp.count)
+		for j := 0; j < sp.count; j++ {
+			entry := typeDirs[i] + resDirHeaderSize + j*resDirEntrySize
+			child(entry, sorted[sp.start+j].id, langDirs[sp.start+j])
+		}
+	}
 
 	// --- 语言层：每个目录只有一条 en-US 条目，紧跟在头部之后 ---
-	for i := range icons {
-		block := offIconLangs + i*dirSize(1)
-		directory(block, 1)
-		leaf(block+resDirHeaderSize, resourceLang, offDataEntries+i*resDataEntrySize)
+	for i, r := range sorted {
+		directory(langDirs[i], 1)
+		leaf(langDirs[i]+resDirHeaderSize, r.lang, offDataEntries+i*resDataEntrySize)
 	}
-	directory(offGroupLang, 1)
-	leaf(offGroupLang+resDirHeaderSize, resourceLang, offDataEntries+n*resDataEntrySize)
 
 	// --- 数据条目 ---
 	// 这里的「数据偏移」写的是段内偏移，链接器会按重定位把它换算成 RVA。
-	relocSites = make([]int, 0, n+1)
-	for i, blob := range icons {
+	relocSites = make([]int, 0, len(sorted))
+	for i, r := range sorted {
 		base := offDataEntries + i*resDataEntrySize
-		put32(base, uint32(blobAt[i]))   // 数据偏移
-		put32(base+4, uint32(len(blob))) // 数据长度
+		put32(base, uint32(blobAt[i]))     // 数据偏移
+		put32(base+4, uint32(len(r.data))) // 数据长度
 		relocSites = append(relocSites, base)
 		// 代码页与保留字段留 0
 	}
-	groupBase := offDataEntries + n*resDataEntrySize
-	put32(groupBase, uint32(blobAt[n]))
-	put32(groupBase+4, uint32(len(group)))
-	relocSites = append(relocSites, groupBase)
 
 	// --- 数据块 ---
-	for i, blob := range icons {
-		copy(sec[blobAt[i]:], blob)
+	for i, r := range sorted {
+		copy(sec[blobAt[i]:], r.data)
 	}
-	copy(sec[blobAt[n]:], group)
 
 	return sec, relocSites
 }

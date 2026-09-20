@@ -24,6 +24,7 @@ import (
 	"syscall"
 	"unsafe"
 
+	"github.com/Baobug/YunSSH"
 	"github.com/Baobug/YunSSH/internal/dialog"
 	"github.com/Baobug/YunSSH/internal/install"
 	"github.com/Baobug/YunSSH/internal/launcher"
@@ -31,8 +32,9 @@ import (
 	"github.com/Baobug/YunSSH/internal/tray"
 )
 
-// version 会写入「应用和功能」的版本信息。
-const version = "0.2.2"
+// 版本号取自根包的 yunssh.Version，由 build.bat 用 -ldflags -X 注入。
+// 这里写进「应用和功能」的卸载项与关于对话框，必须与 exe 版本资源一致，
+// 因此不再另放一份常量。
 
 var (
 	kernel32        = syscall.NewLazyDLL("kernel32.dll")
@@ -107,7 +109,7 @@ func startInteractive() {
 		if _, err := install.Install(install.Options{
 			AutoStart: autoStart,
 			AddToPath: true,
-			Version:   version,
+			Version:   yunssh.Version,
 		}); err != nil {
 			dialog.Error("安装失败", err.Error())
 			os.Exit(1)
@@ -151,7 +153,7 @@ func runCommand(args []string) int {
 	case "autostart":
 		return cmdAutoStart(args[1:])
 	case "version", "--version", "-v":
-		dialog.Info("YunSSH", "ysshtray "+version)
+		dialog.Info("YunSSH", "ysshtray "+yunssh.Version)
 		return 0
 	case "help", "--help", "-h":
 		dialog.Info("YunSSH 托盘程序",
@@ -191,7 +193,7 @@ func cmdInstall(args []string) int {
 	if _, err := install.Install(install.Options{
 		AutoStart: autoStart,
 		AddToPath: true,
-		Version:   version,
+		Version:   yunssh.Version,
 	}); err != nil {
 		if !quiet {
 			dialog.Error("安装失败", err.Error())
