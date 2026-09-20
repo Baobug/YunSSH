@@ -228,9 +228,15 @@ func Uninstall() error {
 // scheduleDirRemoval 生成一个延迟删除安装目录的批处理并启动它。
 //
 // 用 ping 而不是 timeout 做延时：timeout 在没有控制台的环境下会直接报错。
+//
+// 脚本里先 taskkill 再删除：无论从命令行还是从托盘菜单发起卸载，
+// 托盘进程都可能还活着，而它正锁着目录里的 ysshtray.exe。
+// 不先结束它，rmdir 会因为文件占用而静默失败，留下一个删不掉的空壳目录。
 func scheduleDirRemoval(dir string) error {
 	script := "@echo off\r\n" +
 		"ping -n 3 127.0.0.1 >nul\r\n" +
+		"taskkill /IM " + trayExeName + " /F >nul 2>&1\r\n" +
+		"ping -n 2 127.0.0.1 >nul\r\n" +
 		"rmdir /s /q \"" + dir + "\"\r\n" +
 		"del \"%~f0\"\r\n"
 

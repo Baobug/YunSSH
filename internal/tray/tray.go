@@ -34,6 +34,11 @@ type App struct {
 	AutoStartEnabled func() bool
 	// SetAutoStart 切换开机自启。
 	SetAutoStart func(bool) error
+	// Uninstall 执行卸载。留空则菜单里不出现「卸载」项。
+	//
+	// 实现方只负责清理注册表并安排删除安装目录；结束托盘进程由这里统一做——
+	// 目录里的 ysshtray.exe 正被本进程锁着，不退出就删不掉。
+	Uninstall func() error
 	// Terminal 选择承载连接的终端，留空则用 Windows Terminal。
 	Terminal launcher.Terminal
 
@@ -49,6 +54,7 @@ type App struct {
 	mEdit      *systray.MenuItem
 	mRefresh   *systray.MenuItem
 	mAutoStart *systray.MenuItem
+	mUninstall *systray.MenuItem
 	mQuit      *systray.MenuItem
 }
 
@@ -70,7 +76,7 @@ func (a *App) Run() {
 //	────────────
 //	开机自启          （可勾选）
 //	────────────
-//	关于 / 退出
+//	关于 / 卸载 / 退出
 func (a *App) onReady() {
 	systray.SetIcon(appicon.ICO())
 	systray.SetTooltip("YunSSH — SSH 会话管理")
@@ -93,6 +99,12 @@ func (a *App) onReady() {
 
 	systray.AddSeparator()
 	mAbout := systray.AddMenuItem("关于 YunSSH", "")
+
+	// 没注入卸载实现时不显示这一项，避免点了没反应
+	if a.Uninstall != nil {
+		a.mUninstall = systray.AddMenuItem("卸载 YunSSH", "移除程序、快捷方式与开机自启")
+	}
+
 	a.mQuit = systray.AddMenuItem("退出", "退出 YunSSH")
 
 	go a.loop(mAbout)
@@ -100,6 +112,8 @@ func (a *App) onReady() {
 
 // loop 分发静态菜单项的点击事件。
 func (a *App) loop(mAbout *systray.MenuItem) {
+	uninstall := a.uninstallCh()
+
 	for {
 		select {
 		case <-a.mHosts.ClickedCh:
@@ -131,6 +145,10 @@ func (a *App) loop(mAbout *systray.MenuItem) {
 
 		case <-a.mAutoStart.ClickedCh:
 			a.toggleAutoStart()
+
+		case <-uninstall:
+			a.uninstall()
+			return
 
 		case <-mAbout.ClickedCh:
 			dialog.Info("YunSSH",
@@ -228,6 +246,44 @@ func (a *App) connect(alias string) {
 	}
 
 	a.report(fmt.Errorf("启动连接 %s 失败: %w", alias, err))
+}
+
+// uninstallCh 返回「卸载」菜单项的点击通道。
+//
+// 未注入卸载实现时该菜单项不存在，这里返回 nil——nil channel 在 select 中
+// 永远阻塞，正好符合「这一项不存在」的语义，不必在别处再判空。
+func (a *App) uninstallCh() <-chan struct{} {
+	if a.mUninstall == nil {
+		return nil
+	}
+	return a.mUninstall.ClickedCh
+}
+
+// uninstall 确认后执行卸载，并在完成时结束托盘进程。
+//
+// 顺序是关键：先清理注册表、写好删除脚本，再退出托盘。
+// 安装目录里的 ysshtray.exe 此刻正被本进程锁着，必须等它退出脚本才删得掉——
+// 脚本里另有一道 taskkill 作为兜底。
+func (a *App) uninstall() {
+	if a.Uninstall == nil {
+		return
+	}
+
+	if !dialog.Confirm("卸载 YunSSH",
+		"将移除 YunSSH，包括：\n\n"+
+			"· 程序文件，以及开始菜单与桌面的快捷方式\n"+
+			"· 开机自启项，以及 PATH 中的记录\n\n"+
+			"你的 ~/.ssh/config 不会被删除。") {
+		return
+	}
+
+	if err := a.Uninstall(); err != nil {
+		a.report(fmt.Errorf("卸载失败: %w", err))
+		return
+	}
+
+	// 卸载登记与快捷方式都已清掉，这里退出即可；目录清理由延迟脚本收尾
+	systray.Quit()
 }
 
 // toggleAutoStart 反转开机自启状态。

@@ -149,6 +149,7 @@ func runTray() {
 		OpenSearch:       openSearch,
 		AutoStartEnabled: install.AutoStartEnabled,
 		SetAutoStart:     install.SetAutoStart,
+		Uninstall:        install.Uninstall,
 		Terminal:         launcher.Wt,
 	}
 	app.Run()
