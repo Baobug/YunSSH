@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 Zhou Tianbo (Baobug)
+// SPDX-FileCopyrightText: 2026 Zhou Tianbao (Baobug)
 // SPDX-License-Identifier: Apache-2.0
 
 // Package meta 负责解析与生成内嵌在 ~/.ssh/config 中的 YunSSH 元数据注释。

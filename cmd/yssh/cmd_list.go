@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 Zhou Tianbo (Baobug)
+// SPDX-FileCopyrightText: 2026 Zhou Tianbao (Baobug)
 // SPDX-License-Identifier: Apache-2.0
 
 package main

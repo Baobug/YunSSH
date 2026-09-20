@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 Zhou Tianbo (Baobug)
+// SPDX-FileCopyrightText: 2026 Zhou Tianbao (Baobug)
 // SPDX-License-Identifier: Apache-2.0
 
 // Package backend 负责把「一个主机条目」翻译成「一条可直接执行的命令」。

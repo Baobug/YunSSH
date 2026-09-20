@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 Zhou Tianbo (Baobug)
+// SPDX-FileCopyrightText: 2026 Zhou Tianbao (Baobug)
 // SPDX-License-Identifier: Apache-2.0
 
 // Package history 记录主机别名的使用情况，用于「最近使用优先」排序。

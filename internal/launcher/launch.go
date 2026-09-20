@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 Zhou Tianbo (Baobug)
+// SPDX-FileCopyrightText: 2026 Zhou Tianbao (Baobug)
 // SPDX-License-Identifier: Apache-2.0
 
 // Package launcher 把一次连接请求交给终端程序执行。

@@ -244,12 +244,12 @@ docs/BRANCHING.md      分支规范与回滚手册
 
 ## 许可与版权
 
-**Apache License 2.0**，全文见 [`LICENSE`](LICENSE)；著作权归 **Zhou Tianbo (Baobug)**，2026 年。
+**Apache License 2.0**，全文见 [`LICENSE`](LICENSE)；著作权归 **Zhou Tianbao (Baobug)**，2026 年。
 
 每个源文件头部都带机器可读的 SPDX 标识：
 
 ```go
-// SPDX-FileCopyrightText: 2026 Zhou Tianbo (Baobug)
+// SPDX-FileCopyrightText: 2026 Zhou Tianbao (Baobug)
 // SPDX-License-Identifier: Apache-2.0
 ```
 
