@@ -21,6 +21,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
+	"unsafe"
 
 	"github.com/Baobug/YunSSH/internal/dialog"
 	"github.com/Baobug/YunSSH/internal/install"
@@ -30,13 +32,60 @@ import (
 )
 
 // version 会写入「应用和功能」的版本信息。
-const version = "0.2.0"
+const version = "0.2.2"
+
+var (
+	kernel32        = syscall.NewLazyDLL("kernel32.dll")
+	procCreateMutex = kernel32.NewProc("CreateMutexW")
+	procCloseHandle = kernel32.NewProc("CloseHandle")
+)
 
 func main() {
 	if len(os.Args) > 1 {
 		os.Exit(runCommand(os.Args[1:]))
 	}
+
+	release, ok := ensureSingleInstance()
+	if !ok {
+		// 托盘已经在跑。静默退出会让人以为点了没反应，所以给一句提示。
+		dialog.Info("YunSSH 已在运行",
+			"程序正在系统托盘中运行。\n\n"+
+				"如果看不到图标，请点击任务栏的「显示隐藏的图标」箭头查找。")
+		return
+	}
+	defer release()
+
 	startInteractive()
+}
+
+// ensureSingleInstance 用命名互斥量保证同一时刻只有一个托盘实例。
+//
+// 托盘默认开机自启，用户从开始菜单再点一次就会拉起第二个进程；
+// 没有这层保护，任务栏里会出现两个 YunSSH 图标。
+func ensureSingleInstance() (release func(), ok bool) {
+	return acquireInstanceLock(`Local\YunSSH.Tray`)
+}
+
+// acquireInstanceLock 是单实例检查的实现。锁名可注入，便于测试使用独立名字，
+// 避免与真实运行中的托盘互相干扰。
+func acquireInstanceLock(name string) (release func(), ok bool) {
+	ptr, err := syscall.UTF16PtrFromString(name)
+	if err != nil {
+		return func() {}, true
+	}
+
+	// Local\ 前缀表示只在当前登录会话内有效，多用户同时登录互不干扰。
+	handle, _, callErr := procCreateMutex.Call(0, 0, uintptr(unsafe.Pointer(ptr)))
+	if handle == 0 {
+		// 创建失败时不拦截，避免因权限问题导致程序完全起不来
+		return func() {}, true
+	}
+	if errno, isErrno := callErr.(syscall.Errno); isErrno && errno == syscall.ERROR_ALREADY_EXISTS {
+		procCloseHandle.Call(handle)
+		return func() {}, false
+	}
+
+	return func() { procCloseHandle.Call(handle) }, true
 }
 
 // startInteractive 处理双击启动的流程。
