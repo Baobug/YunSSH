@@ -13,13 +13,16 @@ import (
 //
 // 首字符必须是字母或数字——这是安全关键：以 `-` 开头的别名会被 ssh 解析成
 // 命令行选项（`-oProxyCommand=...`、`-L`、`-v` 等），等于把配置内容当命令执行。
-// 后续字符放宽到 `. _ @ -`，覆盖主机名、IP 段与常见的命名习惯。
-var aliasRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._@-]*$`)
+// 后续字符放宽到 `. _ -`，覆盖主机名、IP 段与常见的命名习惯。
+//
+// 刻意不含 `@`：ssh 会把 `foo@bar` 拆成「用户 foo + 主机 bar」，导致别名永远
+// 匹配不到、实际连到别的主机。与其写入一个连不上的别名，不如在入口拒绝。
+var aliasRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
 // ValidAlias 报告一个别名能否安全地写进配置、并作为 ssh 的第一个参数。
 func ValidAlias(alias string) error {
 	if !aliasRe.MatchString(alias) {
-		return fmt.Errorf("别名只能由字母、数字、. _ @ - 组成，且不能以符号开头: %q", alias)
+		return fmt.Errorf("别名只能由字母、数字、. _ - 组成，且不能以符号开头: %q", alias)
 	}
 	return nil
 }
