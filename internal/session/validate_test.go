@@ -12,14 +12,14 @@ import (
 
 // TestValidAlias 验证别名字符集与首字符约束。
 func TestValidAlias(t *testing.T) {
-	valid := []string{"web", "prod-web", "web_01", "a.b.c", "user@host", "a1"}
+	valid := []string{"web", "prod-web", "web_01", "a.b.c", "web-01", "a1"}
 	for _, a := range valid {
 		if err := ValidAlias(a); err != nil {
 			t.Errorf("ValidAlias(%q) 应通过，得到 %v", a, err)
 		}
 	}
 
-	invalid := []string{"", "-v", "-L8080:localhost:80", "-oProxyCommand=evil", "has space", "a=b", "a*b", "a?b", "!a", ".hidden", "@host", "a\nb"}
+	invalid := []string{"", "-v", "-L8080:localhost:80", "-oProxyCommand=evil", "has space", "a=b", "a*b", "a?b", "!a", ".hidden", "@host", "foo@bar", "a\nb"}
 	for _, a := range invalid {
 		if err := ValidAlias(a); err == nil {
 			t.Errorf("ValidAlias(%q) 应被拒绝", a)
