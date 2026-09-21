@@ -34,8 +34,8 @@ func (c *Config) Add(h Host) error {
 	if _, found := c.Find(h.Alias); found {
 		return fmt.Errorf("%w: %s", ErrAliasExists, h.Alias)
 	}
-	if strings.ContainsAny(h.Alias, " \t*?!=") {
-		return fmt.Errorf("别名不能包含空格、等号或通配符: %q", h.Alias)
+	if err := validateHost(h); err != nil {
+		return err
 	}
 
 	// 确保已有内容与新增块之间留一个空行。

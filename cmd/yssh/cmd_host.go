@@ -342,9 +342,10 @@ func cmdEdit(args []string) int {
 	return exitOK
 }
 
-// parseTarget 解析 "用户@主机:端口" 形式的目标描述。
+// parseTarget 解析 "用户@主机[:端口]" 形式的目标描述。
 //
-// 冒号后必须是纯数字才会被当作端口，这样 IPv6 字面量不会被误切。
+// IPv6 字面量必须带方括号，如 user@[2001:db8::1]:22；裸 IPv6（多个冒号且无
+// 括号）无法可靠地区分地址与端口，会明确报错而不是静默切错。
 func parseTarget(s string) (user, host string, port int, err error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -356,18 +357,65 @@ func parseTarget(s string) (user, host string, port int, err error) {
 		user, rest = u, r
 	}
 
-	host = rest
-	if idx := strings.LastIndex(rest, ":"); idx > 0 && !strings.Contains(rest, "]") {
-		if n, e := strconv.Atoi(rest[idx+1:]); e == nil {
-			host = rest[:idx]
-			port = n
-		}
+	host, port, err = splitHostPort(rest)
+	if err != nil {
+		return "", "", 0, err
 	}
-
 	if host == "" {
 		return "", "", 0, fmt.Errorf("无法从 %q 解析出主机地址", s)
 	}
 	return user, host, port, nil
+}
+
+// splitHostPort 从主机部分拆出端口，正确处理 IPv6 字面量。
+func splitHostPort(rest string) (host string, port int, err error) {
+	// 带方括号的 IPv6：[::1] 或 [::1]:22
+	if strings.HasPrefix(rest, "[") {
+		end := strings.Index(rest, "]")
+		if end < 0 {
+			return "", 0, fmt.Errorf("IPv6 地址缺少右括号 ]: %q", rest)
+		}
+		// config 的 HostName 用裸 IPv6，方括号只是命令行/URI 的表示法
+		host = rest[1:end]
+		switch suffix := rest[end+1:]; {
+		case suffix == "":
+			return host, 0, nil
+		case strings.HasPrefix(suffix, ":"):
+			n, err := parsePort(suffix[1:])
+			if err != nil {
+				return "", 0, err
+			}
+			return host, n, nil
+		default:
+			return "", 0, fmt.Errorf("方括号后只能是端口，形如 [::1]:22: %q", rest)
+		}
+	}
+
+	// 无括号却出现多个冒号，只能是裸 IPv6：无法可靠切分端口，要求加方括号。
+	if strings.Count(rest, ":") > 1 {
+		return "", 0, fmt.Errorf("IPv6 地址请加方括号，如 [2001:db8::1]:22: %q", rest)
+	}
+
+	// 恰好一个冒号：host:port
+	if idx := strings.Index(rest, ":"); idx >= 0 {
+		n, err := parsePort(rest[idx+1:])
+		if err != nil {
+			return "", 0, err
+		}
+		return rest[:idx], n, nil
+	}
+
+	// 无冒号：纯主机
+	return rest, 0, nil
+}
+
+// parsePort 解析并校验端口范围。
+func parsePort(s string) (int, error) {
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 1 || n > 65535 {
+		return 0, fmt.Errorf("端口无效: %q（应在 1..65535）", s)
+	}
+	return n, nil
 }
 
 // splitList 把逗号分隔的字符串切分为列表，忽略空白项。

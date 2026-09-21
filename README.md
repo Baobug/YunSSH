@@ -131,6 +131,16 @@ yssh prod-web -- ls -la /var/log          # 远端执行命令
 
 退出码约定见 [`docs/DESIGN.md`](docs/DESIGN.md) 第 8.5 节。
 
+
+
+### 配置文件修改格式
+
+```c
+Host [ip]			//登录设备ip
+  HostName [name]	//可设置别名或默认使用ip
+  User [id]			//登录账户
+```
+
 ---
 
 ## 元数据格式
