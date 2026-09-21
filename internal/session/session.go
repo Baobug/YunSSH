@@ -308,7 +308,13 @@ func parseHostLine(line string) ([]string, bool) {
 
 	aliases := make([]string, 0, len(fields)-1)
 	for _, f := range fields[1:] {
+		// 通配符不是可直接连接的目标。
 		if strings.ContainsAny(f, "*?!") {
+			continue
+		}
+		// 以 - 开头的别名会被 ssh 解析成命令行选项（如 -oProxyCommand=...），
+		// 不能作为可连接目标暴露给菜单或 CLI，否则等于把配置内容当命令执行。
+		if strings.HasPrefix(f, "-") {
 			continue
 		}
 		aliases = append(aliases, f)

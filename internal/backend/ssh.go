@@ -3,7 +3,11 @@
 
 package backend
 
-import "github.com/Baobug/YunSSH/internal/session"
+import (
+	"fmt"
+
+	"github.com/Baobug/YunSSH/internal/session"
+)
 
 // SSH 使用系统自带的 OpenSSH 客户端。
 //
@@ -20,6 +24,13 @@ func (SSH) Build(req Request) (string, []string, error) {
 	exe, err := session.SSHBin()
 	if err != nil {
 		return "", nil, err
+	}
+
+	// 别名会作为 ssh 的第一个参数，因此必须确保它不会被 ssh 当作选项。
+	// 正常流程下别名来自 Add 的校验，这里是对手工编辑或他人共享配置的
+	// 最后一道防线——即使别名绕过了上游，也不允许它以 - 开头进入 argv。
+	if err := session.ValidAlias(req.Alias); err != nil {
+		return "", nil, fmt.Errorf("非法别名: %w", err)
 	}
 
 	// 第一个参数之后的内容原样透传，因此 -L / -N / -v / -D / -- 等
