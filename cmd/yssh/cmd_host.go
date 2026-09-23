@@ -322,12 +322,14 @@ func cmdEdit(args []string) int {
 		fmt.Printf("已创建 %s\n", cfg.Path)
 	}
 
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		editor = "notepad"
+	editor, extra, err := pickEditor()
+	if err != nil {
+		errf("未找到可用的编辑器，请设置 $EDITOR（例如 export EDITOR=nano）。")
+		hintf("配置文件：%s", cfg.Path)
+		return exitError
 	}
 
-	cmd := exec.Command(editor, cfg.Path)
+	cmd := exec.Command(editor, append(append([]string{}, extra...), cfg.Path)...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -341,6 +343,36 @@ func cmdEdit(args []string) int {
 		hintf("提示: 别名 %q 位于 %s", args[0], cfg.Path)
 	}
 	return exitOK
+}
+
+// pickEditor 挑出一个可用的编辑器，返回可执行文件路径与其前置参数。
+//
+// 用同一份候选表覆盖两个平台，不做 build tag：Windows 上 notepad 必然命中，
+// Linux 上 notepad 探测失败后自然落到 nano / vi。notepad 放最前而非最后，
+// 是为了让 Windows 的行为与改动前逐字一致——若放到末尾，装了 Git for Windows
+// 的机器会先命中 vi，反而改变了现有行为。
+//
+// $VISUAL 面向全屏编辑器，按惯例优先于 $EDITOR；两者都可能带参数
+// （如 EDITOR="code --wait"），因此按空格拆分，首个 token 才是可执行文件。
+//
+// 探测失败的候选直接跳过下一个，保证 yssh edit 总能打开。
+func pickEditor() (string, []string, error) {
+	var candidates [][]string
+	for _, env := range []string{os.Getenv("VISUAL"), os.Getenv("EDITOR")} {
+		if fields := strings.Fields(env); len(fields) > 0 {
+			candidates = append(candidates, fields)
+		}
+	}
+	for _, fallback := range []string{"notepad", "sensible-editor", "editor", "nano", "vi"} {
+		candidates = append(candidates, []string{fallback})
+	}
+
+	for _, c := range candidates {
+		if path, err := exec.LookPath(c[0]); err == nil {
+			return path, c[1:], nil
+		}
+	}
+	return "", nil, errors.New("未找到可用的编辑器")
 }
 
 // parseTarget 解析 "用户@主机[:端口]" 形式的目标描述。
