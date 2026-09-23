@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -162,7 +163,50 @@ func (c *Config) Backup() (string, error) {
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return "", err
 	}
+
+	pruneBackups(backupDir)
 	return path, nil
+}
+
+// backupKeep 是保留的备份份数上限。
+//
+// 每份备份都是一份完整的主机清单（属于资产信息），而此前从不清理，
+// 长期使用会累积成百上千份。保留最近这些份足以应对误删回滚。
+const backupKeep = 10
+
+// pruneBackups 只保留最近 backupKeep 份备份，超出的按时间先后删除。
+//
+// 只处理以时间戳命名的文件（config.20060102-150405），避免误删目录中
+// 其他来源的文件；时间戳定长，故字典序即时间序。
+func pruneBackups(dir string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+
+	var names []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		stamp := strings.TrimPrefix(e.Name(), "config.")
+		if stamp == e.Name() {
+			continue // 没有 config. 前缀
+		}
+		if _, err := time.Parse("20060102-150405", stamp); err != nil {
+			continue // 不是时间戳命名，不属于本函数管辖
+		}
+		names = append(names, e.Name())
+	}
+
+	if len(names) <= backupKeep {
+		return
+	}
+
+	sort.Strings(names)
+	for _, name := range names[:len(names)-backupKeep] {
+		_ = os.Remove(filepath.Join(dir, name))
+	}
 }
 
 // Save 原子地写回配置文件。
