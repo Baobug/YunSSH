@@ -75,7 +75,13 @@ func (s *Store) Get(alias string) Entry {
 }
 
 // Touch 记录一次使用。
+//
+// 与 Get/Prune/Save 一样对空句柄免疫：历史只是辅助数据，
+// 任何一处拿到 nil 都不该把整个命令带崩。
 func (s *Store) Touch(alias string) {
+	if s == nil {
+		return
+	}
 	if s.Hosts == nil {
 		s.Hosts = map[string]Entry{}
 	}
@@ -85,17 +91,66 @@ func (s *Store) Touch(alias string) {
 	s.Hosts[alias] = e
 }
 
-// Save 持久化历史记录。失败静默忽略——这是辅助数据，不应打断主流程。
+// Save 原子地持久化历史记录。失败静默忽略——这是辅助数据，不应打断主流程。
+//
+// 先写临时文件再 rename：CLI 与托盘可能同时在写，直接 WriteFile 会互相
+// 踩踏，结果两边都丢统计（文件损坏后虽会自动重建，但记录已经没了）。
+// 临时文件名必须唯一（CreateTemp），否则两个进程会写同一个 .tmp，
+// 交错的内容被 rename 成正式文件后依然是坏的。
 func (s *Store) Save() {
 	if s == nil || s.path == "" {
 		return
 	}
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
+	dir := filepath.Dir(s.path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return
 	}
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return
 	}
-	_ = os.WriteFile(s.path, data, 0o600)
+
+	f, err := os.CreateTemp(dir, ".history-*.tmp")
+	if err != nil {
+		return
+	}
+	tmp := f.Name()
+
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
+		return
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tmp)
+		return
+	}
+	// CreateTemp 建出来是 0600，这里显式再设一次，避免受 umask 影响。
+	_ = os.Chmod(tmp, 0o600)
+
+	// Windows 上 os.Rename 走 MoveFileEx + MOVEFILE_REPLACE_EXISTING，可覆盖已存在文件。
+	if err := os.Rename(tmp, s.path); err != nil {
+		_ = os.Remove(tmp)
+	}
+}
+
+// Prune 丢弃配置中已不存在的别名记录。
+//
+// 删除主机后其记录会永久留在 history.json 里，长期积累等于一份已失效的
+// 资产清单。valid 为空时不做任何事——那多半意味着调用方读取配置失败，
+// 此时清空历史属于误伤。
+func (s *Store) Prune(valid []string) {
+	if s == nil || s.Hosts == nil || len(valid) == 0 {
+		return
+	}
+
+	keep := make(map[string]bool, len(valid))
+	for _, alias := range valid {
+		keep[alias] = true
+	}
+	for alias := range s.Hosts {
+		if !keep[alias] {
+			delete(s.Hosts, alias)
+		}
+	}
 }

@@ -10,10 +10,11 @@ package launcher
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/Baobug/YunSSH/internal/session"
 )
 
 // Terminal 选择承载连接的终端。
@@ -50,11 +51,17 @@ func Start(opts Options) error {
 	return startDefault(opts)
 }
 
-// startWindowsTerminal 用 wt.exe 打开一个新标签页。
-func startWindowsTerminal(opts Options) error {
-	exe, err := WtPath()
+// wtArgs 组装 wt.exe 的参数（不含 wt 自身的路径）。
+//
+// 单独抽出来是为了可测：参数里必须出现 SSHBin() 解析出的绝对路径，
+// 这是「YSSH_SSH_BIN 对托盘同样生效」的唯一判据。
+func wtArgs(opts Options) ([]string, error) {
+	// 传给新标签页的是解析出的 ssh 绝对路径，而不是裸 "ssh"：
+	// 新标签页继承的是终端自身的 PATH，未必能找到 ssh；用绝对路径
+	// 同时也是让 YSSH_SSH_BIN 对托盘生效的前提。
+	sshBin, err := session.SSHBin()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// -w 0：复用当前 Windows Terminal 窗口；-w -1：强制新窗口
@@ -64,23 +71,44 @@ func startWindowsTerminal(opts Options) error {
 	}
 
 	// `nt` 表示新标签页（new-tab）
-	args := []string{"-w", window, "nt", "ssh", opts.Alias}
-	args = append(args, opts.ExtraArgs...)
+	args := []string{"-w", window, "nt", sshBin, opts.Alias}
+	return append(args, opts.ExtraArgs...), nil
+}
 
+// startWindowsTerminal 用 wt.exe 打开一个新标签页。
+func startWindowsTerminal(opts Options) error {
+	exe, err := WtPath()
+	if err != nil {
+		return err
+	}
+	args, err := wtArgs(opts)
+	if err != nil {
+		return err
+	}
 	return exec.Command(exe, args...).Start()
 }
 
-// startDefault 用 `cmd /c start` 弹出一个独立控制台窗口。
-func startDefault(opts Options) error {
-	sshBin, err := exec.LookPath("ssh")
+// cmdStartArgs 组装 `cmd /c start` 的参数（不含 cmd 自身）。
+func cmdStartArgs(opts Options) ([]string, error) {
+	// 走 session.SSHBin() 而不是 exec.LookPath("ssh")：那里才有 YSSH_SSH_BIN
+	// 覆盖与各平台的兜底路径。此前这里自写一套定位逻辑，
+	// 导致 ssh 只存在于非 PATH 目录时「CLI 能连、托盘点了没反应」。
+	sshBin, err := session.SSHBin()
 	if err != nil {
-		return fmt.Errorf("未找到 ssh 可执行文件: %w", err)
+		return nil, err
 	}
 
 	// start 的第一个参数是窗口标题，留空即可
 	args := []string{"/c", "start", "", sshBin, opts.Alias}
-	args = append(args, opts.ExtraArgs...)
+	return append(args, opts.ExtraArgs...), nil
+}
 
+// startDefault 用 `cmd /c start` 弹出一个独立控制台窗口。
+func startDefault(opts Options) error {
+	args, err := cmdStartArgs(opts)
+	if err != nil {
+		return err
+	}
 	return exec.Command("cmd", args...).Start()
 }
 
