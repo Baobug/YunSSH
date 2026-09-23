@@ -1,0 +1,40 @@
+# YunSSH 持续集成。
+#
+# 三个门禁，缺一不可：
+#   1. go vet   —— 静态检查
+#   2. go test  —— 单元测试
+#   3. 交叉编译 —— Windows 与 Linux 两个目标都必须编过
+#
+# 第 3 条是 Linux 支持的护栏。本项目按 build tag 分平台实现，最容易犯的错
+# 是在无 tag 的文件里引用平台专有 API（或反之漏掉 tag），这类问题在
+# 单平台开发时完全不可见。加一道交叉编译门禁后，任何这类改动会立刻失败，
+# 而不必等到真机上才发现。
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: 静态检查
+        run: go vet ./...
+
+      - name: 单元测试
+        run: go test -count=1 ./...
+
+      # go build ./... 在多包模式下只编译不落盘，不会污染工作区
+      - name: 交叉编译（Windows / Linux）
+        run: |
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...
+          CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build ./...
