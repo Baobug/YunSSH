@@ -41,6 +41,9 @@ func cmdConnect(keyword string, extra []string) int {
 	}
 
 	store := history.Load()
+	// 顺手丢弃已从配置中删除的别名记录，避免历史文件随删除操作无限增长。
+	// 放在排序之前是安全的：候选全部来自当前配置，不受影响。
+	store.Prune(aliases)
 	sortCandidates(candidates, store)
 
 	best := candidates[0]
