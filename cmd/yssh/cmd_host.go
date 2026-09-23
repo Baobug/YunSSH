@@ -43,9 +43,10 @@ func cmdAdd(args []string) int {
 				errf("--port 缺少取值")
 				return exitUsage
 			}
-			n, err := strconv.Atoi(args[i])
-			if err != nil || n <= 0 || n > 65535 {
-				errf("端口无效: %q", args[i])
+			// 与目标串里的 :port 共用同一个校验入口，避免两处范围判断漂移。
+			n, err := parsePort(args[i])
+			if err != nil {
+				errf("%v", err)
 				return exitUsage
 			}
 			opts.port = n
