@@ -14,4 +14,11 @@ rsrc_windows_*.syso
 # 临时构建目录
 /build/
 
+# Linux 版的构建、安装与打包脚本只保留在本地：
+# 仓库只收录源码，发布包按版本另行打包分发。
+/for linux/
+
+# 代码审查报告是内部文档，不公开
+CODE-REVIEW.md
+
 .workbuddy/
