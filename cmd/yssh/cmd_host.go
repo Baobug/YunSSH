@@ -347,10 +347,9 @@ func cmdEdit(args []string) int {
 
 // pickEditor 挑出一个可用的编辑器，返回可执行文件路径与其前置参数。
 //
-// 用同一份候选表覆盖两个平台，不做 build tag：Windows 上 notepad 必然命中，
-// Linux 上 notepad 探测失败后自然落到 nano / vi。notepad 放最前而非最后，
-// 是为了让 Windows 的行为与改动前逐字一致——若放到末尾，装了 Git for Windows
-// 的机器会先命中 vi，反而改变了现有行为。
+// 兜底候选表按平台分文件（cmd_editor_windows.go / cmd_editor_other.go）：
+// Windows 首选 notepad 以保持既有行为；Linux 只用原生编辑器——那里叫 notepad
+// 的可执行文件是 wine 的包装脚本，不是我们要的东西。
 //
 // $VISUAL 面向全屏编辑器，按惯例优先于 $EDITOR；两者都可能带参数
 // （如 EDITOR="code --wait"），因此按空格拆分，首个 token 才是可执行文件。
@@ -363,7 +362,7 @@ func pickEditor() (string, []string, error) {
 			candidates = append(candidates, fields)
 		}
 	}
-	for _, fallback := range []string{"notepad", "sensible-editor", "editor", "nano", "vi"} {
+	for _, fallback := range fallbackEditors() {
 		candidates = append(candidates, []string{fallback})
 	}
 
