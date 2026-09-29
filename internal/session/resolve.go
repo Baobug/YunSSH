@@ -31,8 +31,9 @@ func SSHBin() (string, error) {
 		return p, nil
 	}
 	// 兜底：各平台 ssh 的常见安装位置。
-	// 具体路径与 ErrSSHNotFound 的文案由平台文件提供
-	// （resolve_windows.go / resolve_other.go），这里不出现平台判断。
+	// 具体路径与 ErrSSHNotFound 的文案由 internal/platform/{windows,linux}
+	// 提供，经 resolve_windows.go / resolve_other.go 转发进来——
+	// 这里不出现任何平台判断。
 	for _, p := range sshFallbackPaths {
 		if _, err := os.Stat(p); err == nil {
 			return p, nil

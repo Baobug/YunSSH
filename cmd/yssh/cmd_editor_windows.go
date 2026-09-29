@@ -5,10 +5,7 @@
 
 package main
 
-// fallbackEditors 返回 $VISUAL / $EDITOR 都不可用时依次探测的编辑器。
-//
-// Windows 上 notepad 必然存在，放首位是为了让 yssh edit 的行为与本改动之前
-// 逐字一致——若把它挪到末尾，装了 Git for Windows 的机器会先命中 vi。
-func fallbackEditors() []string {
-	return []string{"notepad", "sensible-editor", "editor", "nano", "vi"}
-}
+import "github.com/Baobug/YunSSH/internal/platform/windows"
+
+// 兜底编辑器的候选表是平台差异，实现放在 internal/platform/windows。
+func fallbackEditors() []string { return windows.FallbackEditors() }
