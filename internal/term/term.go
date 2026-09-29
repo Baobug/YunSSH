@@ -44,6 +44,12 @@ var ansiEnabled = true
 // SetANSIEnabled 开关 ANSI 转义序列输出。
 func SetANSIEnabled(on bool) { ansiEnabled = on }
 
+// ANSIEnabled 报告当前是否允许输出 ANSI 转义序列。
+//
+// 与 SetANSIEnabled 成对：调用方（以及测试）需要能读到当前开关状态，
+// 否则无法在改动后还原，也无法断言开关真的生效。
+func ANSIEnabled() bool { return ansiEnabled }
+
 // SetTitle 设置终端窗口标题（OSC 0）。
 //
 // 这是「防手滑」的第一道防线：连到生产环境时窗口标题立刻带上前缀，

@@ -29,13 +29,11 @@ var colorEnabled bool
 
 // initColors 决定是否启用颜色与转义序列输出。
 //
-// 遵循 NO_COLOR 约定（https://no-color.org）；输出被重定向到文件或管道时自动关闭。
+// 遵循 NO_COLOR 约定（https://no-color.org）。「输出是否为终端」由
+// internal/platform/{windows,linux} 的 SupportsANSI 判定，这里不再重复一次：
+// 同一份判断留在两处，迟早会漂移成两个不同的答案。
 func initColors() {
 	colorEnabled = term.SupportsANSI() && os.Getenv("NO_COLOR") == ""
-
-	if fi, err := os.Stdout.Stat(); err != nil || fi.Mode()&os.ModeCharDevice == 0 {
-		colorEnabled = false
-	}
 
 	// 窗口标题（OSC 0）与颜色共用同一个判断，避免重定向时污染内容。
 	term.SetANSIEnabled(colorEnabled)

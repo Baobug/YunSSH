@@ -1,7 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Zhou Tianbao (Baobug)
 // SPDX-License-Identifier: Apache-2.0
 
+//go:build windows
+
 // Package launcher 把一次连接请求交给终端程序执行。
+//
+// 本包只服务 Windows：托盘需要一个能开新窗口的程序（Windows Terminal 或
+// cmd /c start）来承载会话。Linux 侧没有托盘，CLI 直接在当前终端里跑 ssh，
+// 因此不需要也不可能有一个对等的实现——故整包加 windows 约束，
+// 而不是硬凑一个 Linux 版本。
 //
 // 与 internal/backend 的分工：
 //   - backend 负责「拼出正确的 ssh 命令行」

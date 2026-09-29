@@ -1,14 +1,20 @@
 # YunSSH 持续集成。
 #
-# 三个门禁，缺一不可：
+# 四个门禁，缺一不可：
 #   1. go vet   —— 静态检查
 #   2. go test  —— 单元测试
 #   3. 交叉编译 —— Windows 与 Linux 两个目标都必须编过
+#   4. 依赖图断言 —— Linux 产物不得引入第三方模块或平台专有包
 #
 # 第 3 条是 Linux 支持的护栏。本项目按 build tag 分平台实现，最容易犯的错
 # 是在无 tag 的文件里引用平台专有 API（或反之漏掉 tag），这类问题在
 # 单平台开发时完全不可见。加一道交叉编译门禁后，任何这类改动会立刻失败，
 # 而不必等到真机上才发现。
+#
+# 第 4 条补上第 3 条管不到的一半。「编得过」不等于「编进去的东西是干净的」：
+# 发布承诺 Linux 二进制是零依赖的静态单文件，而某个无 tag 的文件引用了
+# Windows 专有包时，只要该文件没被链接进来，交叉编译照样通过。这里改为直接
+# 对依赖图下断言，把承诺变成可执行的检查。
 name: CI
 
 on:
@@ -38,3 +44,40 @@ jobs:
         run: |
           CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...
           CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build ./...
+
+      # 断言三条，任一不成立即失败。全部基于 go list，不需要真的跑起程序。
+      - name: 依赖图断言（Linux）
+        run: |
+          fail=0
+
+          # 1. cmd/yssh 的依赖不得含任何第三方模块。
+          #    标准库路径没有点号，本仓库路径以模块名开头，两者之外的都算第三方。
+          third=$(go list -deps ./cmd/yssh | grep -v '^github.com/Baobug/YunSSH' | grep '\.' || true)
+          if [ -n "$third" ]; then
+            echo "::error::cmd/yssh 引入第三方依赖，Linux 产物不再是零依赖单文件"
+            echo "$third"
+            fail=1
+          fi
+
+          # 2. Windows 专有包不得进入 cmd/yssh 的依赖图。
+          leaked=$(go list -deps ./cmd/yssh | grep -E 'internal/(launcher|tray|appicon)|internal/platform/windows' || true)
+          if [ -n "$leaked" ]; then
+            echo "::error::Windows 专有包泄漏进 Linux 依赖图"
+            echo "$leaked"
+            fail=1
+          fi
+
+          # 3. 漏掉 build tag 的整包平台模块：这些包在 Linux 的包清单里根本不该出现。
+          #    这一条专门针对 internal/launcher 曾经缺 //go:build windows 的缺陷——
+          #    它没有调用方引用，所以第 2 条查不出来，只有看包清单才发现得了。
+          untagged=$(go list ./... | grep -E 'internal/(launcher|tray)|internal/platform/windows|cmd/ysshtray' || true)
+          if [ -n "$untagged" ]; then
+            echo "::error::Windows 专有包未加 //go:build windows，Linux 下仍会被编译"
+            echo "$untagged"
+            fail=1
+          fi
+
+          if [ "$fail" -ne 0 ]; then
+            exit 1
+          fi
+          echo "依赖图断言通过：Linux 产物零第三方依赖，且不含 Windows 专有包。"

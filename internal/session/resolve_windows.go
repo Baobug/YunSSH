@@ -5,16 +5,12 @@
 
 package session
 
-import "errors"
+import "github.com/Baobug/YunSSH/internal/platform/windows"
 
-// ErrSSHNotFound 表示系统中找不到 ssh 可执行文件。
-var ErrSSHNotFound = errors.New("未找到 ssh 可执行文件，请确认已启用 Windows 的 OpenSSH 客户端功能")
+// ssh 兜底路径与错误文案的平台实现集中在 internal/platform/windows；
+// 这里把名字转发进 session 包，于是 resolve.go 里完全不出现平台判断。
 
-// sshFallbackPaths 是 PATH 中找不到 ssh 时的兜底搜索路径。
-//
-// Windows 的 OpenSSH 由「可选功能」装入系统目录，不一定出现在 PATH 里，
-// 因此必须显式列出默认安装位置。
-var sshFallbackPaths = []string{
-	`C:\Windows\System32\OpenSSH\ssh.exe`,
-	`C:\Program Files\OpenSSH\ssh.exe`,
-}
+var (
+	ErrSSHNotFound   = windows.ErrSSHNotFound
+	sshFallbackPaths = windows.SSHFallbackPaths
+)
