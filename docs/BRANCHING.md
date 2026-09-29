@@ -67,14 +67,30 @@ v0.1.0        v0.1.1
 | `v0.4.x` | Step 4 —— 自研 SSH 客户端 |
 | `v0.5.x` | Step 5 —— 批量导入与批量执行 |
 
-> **Linux 支持的定位（2026-09-23 补充）**
+> **Linux 支持的定位（2026-09-23 补充，2026-09-29 修订）**
 >
-> 上表的 `v0.2.x`「托盘常驻程序」**仅指 Windows**。Linux 版以 CLI 形态随 `for linux/`
-> 的构建与安装脚本分发，**托盘暂缓**（原因见 [`DESIGN.md`](DESIGN.md) §19.8），
-> 因此也不提供开机自启——Linux 侧没有常驻进程可启动。
+> 上表的 `v0.2.x`「托盘常驻程序」**仅指 Windows**。Linux 版以 CLI 形态随**发布包内的
+> 构建与安装脚本**分发（源码仓库不含该目录），**托盘暂缓**（原因见
+> [`DESIGN.md`](DESIGN.md) §19.8），因此也不提供开机自启——Linux 侧没有常驻进程可启动。
 >
-> 两个平台共用**同一份 Go 源码与同一份 `~/.ssh/config`**，平台差异全部由 build tag
-> 分流（`xxx_windows.go` / `xxx_other.go`），**不设独立分支，也不 fork**。
+> 两个平台共用**同一份 Go 源码与同一份 `~/.ssh/config`**，**不设独立分支，也不 fork**。
+> 平台差异分两路走：
+>
+> - **目录分层**：`internal/platform/windows` 与 `internal/platform/linux` 成对摆放，
+>   收纳「同一件事、两个平台做法不同」的实现（终端能力、提示框、ssh 兜底路径、
+>   兜底编辑器）。上层包保留与平台无关的部分，经一层薄委托调用它们。想知道某个
+>   平台上究竟怎么做的，看这两个包即可，不必横跨整个仓库去找。
+> - **文件名后缀 + build tag**（`xxx_windows.go` / `xxx_other.go`）：用于整包天生
+>   只服务单一平台的模块——`internal/tray`、`internal/install`、`internal/launcher`、
+>   `cmd/ysshtray` 直接加 `//go:build windows`，这样它们在 Linux 的 `go list ./...`
+>   里根本不出现。
+>
+> 构建约束一律写作 `windows` / `!windows` 而非 `windows` / `linux`，以保住 macOS 与
+> BSD 的可编译性；目录名取 `linux` 只是因为当前实际交付目标只有它。
+>
+> `internal/appicon` 与 `tools/` 下的几个工具尚未加平台约束，Linux 的 `go list ./...`
+> 仍会编译它们。它们**不进入 `cmd/yssh` 的依赖图**（可用
+> `go list -deps ./cmd/yssh` 验证），因此不影响 Linux 产物；归属待定。
 
 Step 的完整定义见 [`README.md`](../README.md) 的「状态」一节。
 
