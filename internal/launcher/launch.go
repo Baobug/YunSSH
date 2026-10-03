@@ -119,18 +119,28 @@ func startDefault(opts Options) error {
 	return exec.Command("cmd", args...).Start()
 }
 
-// StartCommand 在 Windows Terminal 的新标签页里运行一条命令。
+// StartCommand 在 Windows Terminal 的新标签页里运行一条命令，并让标签页在命令
+// 结束后保持打开。
 //
-// 用于「搜索主机」这类需要把控制权交回 CLI 的场景：
-// 托盘只负责开一个标签页，交互仍由 yssh 自己完成。
+// 用于「搜索主机」这类场景：yssh 无参数只会列出主机随即退出，若不加 cmd /k
+// 承载，标签页会随之一闪而过——用户来不及看列表，更无法继续敲 yssh 连接。
+// cmd /k 先执行命令、之后停在提示符，正好补上「保持打开」这一层。
 func StartCommand(exe string, args ...string) error {
 	wt, err := WtPath()
 	if err != nil {
 		return err
 	}
 
-	full := append([]string{"-w", "0", "nt", exe}, args...)
-	return exec.Command(wt, full...).Start()
+	return exec.Command(wt, startCommandArgs(exe, args...)...).Start()
+}
+
+// startCommandArgs 组装 StartCommand 的 wt 参数。
+//
+// 单独抽出是为了可测：参数里必须出现 cmd /k，这是「标签页不随命令退出而关闭」
+// 的唯一判据。
+func startCommandArgs(exe string, args ...string) []string {
+	inner := append([]string{"cmd", "/k", exe}, args...)
+	return append([]string{"-w", "0", "nt"}, inner...)
 }
 
 // WtPath 定位 Windows Terminal 的可执行文件。
