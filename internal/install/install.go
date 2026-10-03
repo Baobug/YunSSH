@@ -199,6 +199,9 @@ func Uninstall() error {
 	if err != nil {
 		return err
 	}
+	if err := verifyUninstallDir(dir); err != nil {
+		return err
+	}
 
 	// 先关自启：否则下次登录又被拉起来，而文件已经不在了
 	if err := setAutoStart("", false); err != nil {
@@ -223,6 +226,20 @@ func Uninstall() error {
 	}
 
 	return scheduleDirRemoval(dir)
+}
+
+// verifyUninstallDir 校验待删除目录确实是 YunSSH 的安装目录。
+//
+// 卸载会递归删除 dir（rmdir /s /q），而 dir 取自注册表的 InstallLocation。
+// HKCU 对同一用户的任意进程可写，一旦被改写（恶意软件、误操作、残留的旧记录），
+// 卸载就会无确认地递归删除那个目录。目录内必须存在我们的程序文件，否则拒绝。
+func verifyUninstallDir(dir string) error {
+	for _, name := range []string{trayExeName, cliExeName} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("安装目录 %q 中未找到 YunSSH 程序文件，已拒绝删除（注册表可能被改动）", dir)
 }
 
 // scheduleDirRemoval 生成一个延迟删除安装目录的批处理并启动它。
