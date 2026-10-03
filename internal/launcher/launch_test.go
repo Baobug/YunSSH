@@ -200,6 +200,27 @@ func TestStartFallsBackToDefault(t *testing.T) {
 	}
 }
 
+// TestStartCommandArgsUsesCmdKeep 锁定「搜索主机」的修复：
+// 参数必须经 cmd /k 承载，否则 yssh 列完表即退出，wt 标签页随之关闭。
+func TestStartCommandArgsUsesCmdKeep(t *testing.T) {
+	args := startCommandArgs(`C:\App\yssh.exe`)
+
+	want := []string{"-w", "0", "nt", "cmd", "/k", `C:\App\yssh.exe`}
+	if !equal(args, want) {
+		t.Errorf("startCommandArgs = %v，期望 %v", args, want)
+	}
+}
+
+// TestStartCommandArgsTransparent 验证附加参数被透传，且仍以 cmd /k 承载。
+func TestStartCommandArgsTransparent(t *testing.T) {
+	args := startCommandArgs(`C:\App\yssh.exe`, "--plain")
+
+	want := []string{"-w", "0", "nt", "cmd", "/k", `C:\App\yssh.exe`, "--plain"}
+	if !equal(args, want) {
+		t.Errorf("startCommandArgs = %v，期望 %v", args, want)
+	}
+}
+
 // equal 逐项比较字符串切片。
 func equal(a, b []string) bool {
 	if len(a) != len(b) {
